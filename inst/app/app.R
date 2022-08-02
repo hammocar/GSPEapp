@@ -26,6 +26,9 @@ library(sp)
 library(readr)
 library(DT)
 library(tools)
+library(DBI)
+library(odbc)
+library(lubridate)
 
 source("moosepop.R")
 # source("D:/Projects/Moose/Surveys/John's Code/GSPEandMoosePopCode.r")
@@ -44,96 +47,16 @@ exitFS.call(document);
 
 
 
-sidebar = shinydashboard::dashboardSidebar(
-    sidebarMenu(
-        menuItem("GSPE Moose Predictions", tabName="GSPE")
-
-    )
-
-)
-
-body = dashboardBody(
-    tabItems(
-        ############################
-        # HOME TAB ##############
-        ############################
-
-        tabItem(tabName="GSPE",titlePanel(h1(strong("GSPE Moose Survey Tool"))),
-                p(""),
-                p("Upload a moose survey to explore demographics"),
-                fluidPage(
-
-                    fluidRow(box(width = 12,
-                                 column(width=12,
-                                        fileInput("survey_file", "Choose CSV File (Obtained from Winfonet)",
-                                                  multiple = FALSE,
-                                                  accept = c("text/csv",
-                                                             "text/comma-separated-values,text/plain",
-                                                             ".csv")),
-                                        pickerInput("columns", "Select Columns for Analysis Areas", choices = NULL, multiple = TRUE))), # no choices before uploading)),
-                             h3(strong("Population Demographics")),
-                             box(width = 12,
-                                 checkboxInput("sightability", "Use sightability correction factor", value = FALSE),
-                                 column(width=3,
-                                        numericInput("high_trials", "Number of High Stratum Sightability Trials", value = 0, min = 1, step = 1)
-                                 ),
-                                 column(width=3,
-                                        numericInput("high_missed", "Number of High Stratum Moose Missed", value = 0, min = 1, step = 1)
-                                 ),
-                                 column(width=3,
-                                        numericInput("low_trials", "Number of Low Stratum Sightability Trials", value = 0, min = 1, step = 1)
-                                 ),
-                                 column(width=3,
-                                        numericInput("low_missed", "Number of Low Stratum Moose Missed", value = 0, min = 1, step = 1)
-                                 ),
-                                 h4(strong("Total Abundance")),
-                                 fluidRow(box(width = 12,
-
-                                              column(width=12,
-                                                     DT::dataTableOutput("GSPE_table_abundance_SCF")%>% withSpinner(color="#0dc5c1")
-                                              )
-                                 )),
-
-                                 h4(strong("Bull:Cow Composition")),
-                                 fluidRow(box(width = 12,
-                                              column(width=12,
-                                                     DT::dataTableOutput("GSPE_table_bullcow")%>% withSpinner(color="#0dc5c1")
-                                              )
-                                 )),
-                                 h4(strong("Calf:Cow Composition")),
-                                 fluidRow(box(width = 12,
-                                              column(width=12,
-                                                     DT::dataTableOutput("GSPE_table_calfcow")%>% withSpinner(color="#0dc5c1")
-                                              )
-                                 ))),
-                             h3(strong("Sex/Age Specific Abundance Predictions") ,"(No Sightability Correction)"),
-
-                             box(width = 12,
-                                 column(width = 5,
-                                        selectInput("metric", "Which demographic?", choices = c("totalmoose", "TotalBulls", "TotalCows", "TotalCalves"), selected = "totalmoose", multiple = FALSE)),
-
-
-                                 column(width=12,
-                                        pickerInput("plot_AA", "Analysis Area", choices = "Total_Survey", selected = "Total_Survey", multiple = FALSE),
-                                        DT::dataTableOutput("GSPE_table_abundance")
-                                 ),
-
-                                 column(width = 12,
-                                        plotOutput("GSPE_plot", height = "1000px") %>% withSpinner(color="#0dc5c1")
-
-
-                                 )
-                             )),
-
-                ))))
 
 
 
-ui<-shiny::shinyUI(dashboardPage(
-    dashboardHeader(title = "Moose Manager"),
-    sidebar,
-    body
-))
+
+
+
+header <- dashboardHeader(title = "Moose Manager")
+sidebar <- dashboardSidebar(uiOutput("sidebarpanel"))
+body <- dashboardBody(uiOutput("body"))
+ui <- dashboardPage(header, sidebar, body)
 
 
 source("moosepop.R")
@@ -157,8 +80,209 @@ textStyle <- element_text(face = "bold.italic", color = "black", size = 20)
 
 ##################################################################
 
+login <- box(
+    title = "Login",
+    textInput("userName", "Username"),
+    passwordInput("passwd", "Password"),
+    br(),
+    actionButton("Login", "Log in")
+)
+
 
 server<-shinyServer(function(input, output, session) {
+
+    # To logout back to login page
+    login.page = paste(
+        isolate(session$clientData$url_protocol),
+        "//",
+        isolate(session$clientData$url_hostname),
+        ":",
+        isolate(session$clientData$url_port),
+        sep = ""
+    )
+
+    USER <- reactiveValues(Logged = F)
+    observe({
+        if (USER$Logged == FALSE) {
+            if (!is.null(input$Login)) {
+                if (input$Login > 0) {
+                    Username <- isolate(input$userName)
+                    Password <- isolate(input$passwd)
+                    moose <- odbc::dbConnect(odbc(),
+                                             Driver = "SQL Server",
+                                             Server = "DWCDBP",
+                                             Database= "WC_moosepop",
+                                             UID = Username,
+                                             PWD = Password,
+                                             trusted_connection = "true",
+                                             Port = 1443,
+                                             TDS_Version = 7.2)
+                    if (class(moose)[1] == "Microsoft SQL Server"){
+                            USER$Logged <- TRUE
+                    }
+                }
+            }
+        }
+    })
+
+    output$sidebarpanel <- renderUI({
+        if (USER$Logged == TRUE) {
+            div(
+                shinydashboard::dashboardSidebar(
+                        sidebarMenu(
+                            menuItem("GSPE Moose Predictions", tabName="GSPE")
+
+                        )
+
+                )
+            )
+        }
+    })
+
+    output$body <- renderUI({
+        if (USER$Logged == TRUE) {
+                dashboardBody(
+                    textInput("GMU", "Search GMU for surveys:",20),
+                    fluidRow(column(width = 4,
+                                    airDatepickerInput("surveyyear_min",
+                                                       label = "Select date range",
+                                                       value = "1990",
+                                                       maxDate = format(Sys.Date(),"%Y"),
+                                                       minDate = "1990",
+                                                       view = "years", #editing what the popup calendar shows when it opens
+                                                       minView = "years", #making it not possible to go down to a "months" view and pick the wrong date
+                                                       dateFormat = "yyyy")),
+                             column(width = 1, br(),p("to")),
+                             column(width = 4, airDatepickerInput("surveyyear_max",
+                                                                  label = "",
+                                                                  value = format(Sys.Date(),"%Y"),
+                                                                  maxDate = format(Sys.Date(),"%Y"),
+                                                                  minDate = "1990",
+                                                                  view = "years", #editing what the popup calendar shows when it opens
+                                                                  minView = "years", #making it not possible to go down to a "months" view and pick the wrong date
+                                                                  dateFormat = "yyyy"))),
+                    DT::dataTableOutput("tbl"),
+                    DT::dataTableOutput("survey_data"),
+                    tabItems(
+                        ############################
+                        # HOME TAB ##############
+                        ############################
+                        tabItem(tabName="GSPE",titlePanel(h1(strong("GSPE Moose Survey Tool"))),
+                                p(""),
+                                p("Upload a moose survey to explore demographics"),
+                                fluidPage(
+
+                                    fluidRow(box(width = 12,
+                                                 column(width=12,
+                                                        fileInput("survey_file", "Choose CSV File (Obtained from Winfonet)",
+                                                                  multiple = FALSE,
+                                                                  accept = c("text/csv",
+                                                                             "text/comma-separated-values,text/plain",
+                                                                             ".csv")),
+                                                        pickerInput("columns", "Select Columns for Analysis Areas", choices = NULL, multiple = TRUE))), # no choices before uploading)),
+                                             h3(strong("Population Demographics")),
+                                             box(width = 12,
+                                                 checkboxInput("sightability", "Use sightability correction factor", value = FALSE),
+                                                 column(width=3,
+                                                        numericInput("high_trials", "Number of High Stratum Sightability Trials", value = 0, min = 1, step = 1)
+                                                 ),
+                                                 column(width=3,
+                                                        numericInput("high_missed", "Number of High Stratum Moose Missed", value = 0, min = 1, step = 1)
+                                                 ),
+                                                 column(width=3,
+                                                        numericInput("low_trials", "Number of Low Stratum Sightability Trials", value = 0, min = 1, step = 1)
+                                                 ),
+                                                 column(width=3,
+                                                        numericInput("low_missed", "Number of Low Stratum Moose Missed", value = 0, min = 1, step = 1)
+                                                 ),
+                                                 h4(strong("Total Abundance")),
+                                                 fluidRow(box(width = 12,
+
+                                                              column(width=12,
+                                                                     DT::dataTableOutput("GSPE_table_abundance_SCF")%>% withSpinner(color="#0dc5c1")
+                                                              )
+                                                 )),
+
+                                                 h4(strong("Bull:Cow Composition")),
+                                                 fluidRow(box(width = 12,
+                                                              column(width=12,
+                                                                     DT::dataTableOutput("GSPE_table_bullcow")%>% withSpinner(color="#0dc5c1")
+                                                              )
+                                                 )),
+                                                 h4(strong("Calf:Cow Composition")),
+                                                 fluidRow(box(width = 12,
+                                                              column(width=12,
+                                                                     DT::dataTableOutput("GSPE_table_calfcow")%>% withSpinner(color="#0dc5c1")
+                                                              )
+                                                 ))),
+                                             h3(strong("Sex/Age Specific Abundance Predictions") ,"(No Sightability Correction)"),
+
+                                             box(width = 12,
+                                                 column(width = 5,
+                                                        selectInput("metric", "Which demographic?", choices = c("totalmoose", "TotalBulls", "TotalCows", "TotalCalves"), selected = "totalmoose", multiple = FALSE)),
+
+
+                                                 column(width=12,
+                                                        pickerInput("plot_AA", "Analysis Area", choices = "Total_Survey", selected = "Total_Survey", multiple = FALSE),
+                                                        DT::dataTableOutput("GSPE_table_abundance")
+                                                 ),
+
+                                                 column(width = 12,
+                                                        plotOutput("GSPE_plot", height = "1000px") %>% withSpinner(color="#0dc5c1")
+
+
+                                                 )
+                                             )),
+
+                                ))))
+        } else {
+            login
+        }
+    })
+
+
+
+    searched_surveys <- reactive({
+        query<-paste("SELECT DISTINCT surveyid, surveyname, surveyyear
+    FROM v_wc_moosepop_reprospreadsheet
+    WHERE GMU like '", input$GMU,"%' AND surveyyear BETWEEN ",year(input$surveyyear_min), " AND ", year(input$surveyyear_max),sep="")
+
+        all.id.list <- dbGetQuery(moose,query)
+        all.id.list
+
+    })
+
+    output$tbl <- DT::renderDataTable({
+        datatable(searched_surveys(), extensions = 'Buttons',
+                  selection = 'single'
+                  , options = list(
+                      dom = "Blfrtip"
+                      , buttons =
+                          list("copy", list(
+                              extend = "collection"
+                              , buttons = c("csv", "excel", "pdf")
+                              , text = "Download"
+                          ) )))
+
+
+    })
+
+    observe({
+        req(input$tbl_rows_selected)
+        survey_ids <- searched_surveys()[input$tbl_rows_selected,"surveyid"]
+        moose.dat <- dbGetQuery(moose,"exec spr_wc_moosepop_reprospreadsheet @surveyIDlist = '",survey_ids,"'")
+        out <- by(data=moose.dat,as.factor(moose.dat$Surveyyear),FUN=function(x){
+            results(x)
+        })
+        output$survey_data<- DT::renderDataTable(out)
+
+
+        })
+
+
+
+
+
 
     if (!interactive()) {
         session$onSessionEnded(function() {
@@ -182,6 +306,7 @@ server<-shinyServer(function(input, output, session) {
         }
         read.csv(infile$datapath, header = TRUE)
     })
+
     observeEvent(input$survey_file,{
 
         updatePickerInput(session = session, inputId = "columns", choices = names(pd()))
