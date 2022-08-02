@@ -142,7 +142,11 @@ server<-shinyServer(function(input, output, session) {
     output$body <- renderUI({
         if (USER$Logged == TRUE) {
                 dashboardBody(
-                    textInput("GMU", "Search GMU for surveys:",20),
+                  fluidRow(column(12,
+                  box(
+                    h1("Browse for surveys"),
+                    h3("Select a survey in the table to view/download survey data"),
+                    textInput("keyword", "Search in column surveyname:",12),
                     fluidRow(column(width = 4,
                                     airDatepickerInput("surveyyear_min",
                                                        label = "Select date range",
@@ -161,26 +165,16 @@ server<-shinyServer(function(input, output, session) {
                                                                   view = "years", #editing what the popup calendar shows when it opens
                                                                   minView = "years", #making it not possible to go down to a "months" view and pick the wrong date
                                                                   dateFormat = "yyyy"))),
-                    DT::dataTableOutput("tbl"),
-                    DT::dataTableOutput("survey_data"),
-                    tabItems(
-                        ############################
-                        # HOME TAB ##############
-                        ############################
-                        tabItem(tabName="GSPE",titlePanel(h1(strong("GSPE Moose Survey Tool"))),
-                                p(""),
-                                p("Upload a moose survey to explore demographics"),
-                                fluidPage(
-
-                                    fluidRow(box(width = 12,
-                                                 column(width=12,
-                                                        fileInput("survey_file", "Choose CSV File (Obtained from Winfonet)",
-                                                                  multiple = FALSE,
-                                                                  accept = c("text/csv",
-                                                                             "text/comma-separated-values,text/plain",
-                                                                             ".csv")),
-                                                        pickerInput("columns", "Select Columns for Analysis Areas", choices = NULL, multiple = TRUE))), # no choices before uploading)),
-                                             h3(strong("Population Demographics")),
+                    DT::dataTableOutput("tbl")))),
+                  fluidRow(column(12,
+                  box(
+                    h1("Survey Data"),
+                    DT::dataTableOutput("survey_data")))),
+                  fluidRow(box(
+                    h1(strong("GeoSpatial Population Estimate")),
+                    uiOutput("columns"),
+                    pickerInput("plot_AA", "Analysis Area", choices = "Total_Survey", selected = "Total_Survey", multiple = FALSE),
+                    selectInput("metric", "Which demographic?", choices = c("totalmoose", "TotalBulls", "TotalCows", "TotalCalves"), selected = "totalmoose", multiple = FALSE),
                                              box(width = 12,
                                                  checkboxInput("sightability", "Use sightability correction factor", value = FALSE),
                                                  column(width=3,
@@ -215,26 +209,10 @@ server<-shinyServer(function(input, output, session) {
                                                                      DT::dataTableOutput("GSPE_table_calfcow")%>% withSpinner(color="#0dc5c1")
                                                               )
                                                  ))),
-                                             h3(strong("Sex/Age Specific Abundance Predictions") ,"(No Sightability Correction)"),
-
                                              box(width = 12,
-                                                 column(width = 5,
-                                                        selectInput("metric", "Which demographic?", choices = c("totalmoose", "TotalBulls", "TotalCows", "TotalCalves"), selected = "totalmoose", multiple = FALSE)),
+                                                        plotOutput("GSPE_plot", height = "1000px") %>% withSpinner(color="#0dc5c1"))
 
-
-                                                 column(width=12,
-                                                        pickerInput("plot_AA", "Analysis Area", choices = "Total_Survey", selected = "Total_Survey", multiple = FALSE),
-                                                        DT::dataTableOutput("GSPE_table_abundance")
-                                                 ),
-
-                                                 column(width = 12,
-                                                        plotOutput("GSPE_plot", height = "1000px") %>% withSpinner(color="#0dc5c1")
-
-
-                                                 )
-                                             )),
-
-                                ))))
+                                )))
         } else {
             login
         }
@@ -245,8 +223,18 @@ server<-shinyServer(function(input, output, session) {
     searched_surveys <- reactive({
         query<-paste("SELECT DISTINCT surveyid, surveyname, surveyyear
     FROM v_wc_moosepop_reprospreadsheet
-    WHERE GMU like '", input$GMU,"%' AND surveyyear BETWEEN ",year(input$surveyyear_min), " AND ", year(input$surveyyear_max),sep="")
-
+    WHERE surveyname like '", input$keyword,"%' AND surveyyear BETWEEN ",year(input$surveyyear_min), " AND ", year(input$surveyyear_max),sep="")
+        Username <- isolate(input$userName)
+        Password <- isolate(input$passwd)
+        moose <- odbc::dbConnect(odbc(),
+                                 Driver = "SQL Server",
+                                 Server = "DWCDBP",
+                                 Database= "WC_moosepop",
+                                 UID = Username,
+                                 PWD = Password,
+                                 trusted_connection = "true",
+                                 Port = 1443,
+                                 TDS_Version = 7.2)
         all.id.list <- dbGetQuery(moose,query)
         all.id.list
 
@@ -262,55 +250,40 @@ server<-shinyServer(function(input, output, session) {
                               extend = "collection"
                               , buttons = c("csv", "excel", "pdf")
                               , text = "Download"
-                          ) )))
+                          ) )), rownames = FALSE)
 
 
     })
 
-    observe({
+    moose.dat<-reactive({
         req(input$tbl_rows_selected)
         survey_ids <- searched_surveys()[input$tbl_rows_selected,"surveyid"]
-        moose.dat <- dbGetQuery(moose,"exec spr_wc_moosepop_reprospreadsheet @surveyIDlist = '",survey_ids,"'")
-        out <- by(data=moose.dat,as.factor(moose.dat$Surveyyear),FUN=function(x){
-            results(x)
-        })
-        output$survey_data<- DT::renderDataTable(out)
+        query<-paste("exec spr_wc_moosepop_reprospreadsheet @surveyIDlist = '", survey_ids,"'", sep = "")
+        moose.dat <- dbGetQuery(moose, query)
+        moose.dat})
+
+        # out <- by(data=moose.dat,as.factor(moose.dat$Surveyyear),FUN=function(x){
+        #     results(x)
+        # })
+        output$columns<-renderUI(pickerInput(inputId = "columns", choices = names(moose.dat()), multiple = TRUE))
+
+        output$survey_data<- DT::renderDataTable(server = FALSE, {moose.dat()}, options = list(
+          dom = "Blfrtip",
+          scrollX = T,
+          iDisplayLength = 5,
+          buttons =
+            list("copy", list(
+              extend = "collection" ,
+              buttons = c("csv", "excel", "pdf"),
+              text = "Download",
+              exportOptions = list(
+                modifier = list(page = "all")
+              )
+            ) )), rownames = FALSE)
 
 
-        })
 
 
-
-
-
-
-    if (!interactive()) {
-        session$onSessionEnded(function() {
-            stopApp()
-            q("no")
-        })
-    }
-    #This function is repsonsible for loading in the selected file
-
-
-    pd <- reactive({
-        validate(
-            need(!is.null(input$survey_file ), "Please select a .csv file"),
-            need(file_ext(input$survey_file ) == "csv", "Remember to save .xls files as .csv's prior to upload.")
-
-        )
-        infile <- input$survey_file
-        if (is.null(infile)) {
-            # User has not uploaded a file yet
-            return(NULL)
-        }
-        read.csv(infile$datapath, header = TRUE)
-    })
-
-    observeEvent(input$survey_file,{
-
-        updatePickerInput(session = session, inputId = "columns", choices = names(pd()))
-    })
 
 
     observeEvent(input$columns,{
@@ -322,7 +295,7 @@ server<-shinyServer(function(input, output, session) {
 
 
 
-    td<-reactive(AA_tables(pd(), input$columns))
+    td<-reactive(AA_tables(moose.dat(), input$columns))
 
     metric<-reactive(input$metric)
 
@@ -335,7 +308,7 @@ server<-shinyServer(function(input, output, session) {
 
 
     output$GSPE_plot <- renderPlot({
-        plot_data<-pd()
+        plot_data<-moose.dat()
         table_data<-td()
 
 
