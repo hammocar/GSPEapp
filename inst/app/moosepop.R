@@ -1670,7 +1670,7 @@ function(column.numerator, column.denominator, strat, data,
 #'
 #' @examples
 results<-function(data,AA = NULL, metric = "totalmoose"){
-  for (i in 1:ncol(data)) if(!is.factor(data[,i])) data[is.na(data[,i]),i] <- 0
+  for (i in 1:ncol(data)) if(!is.factor(data[,i]) && !isUnknown(data[,i])) data[is.na(data[,i]),i] <- 0
   data$columnpred <- 1
   column.pred <- ifelse(is.null(AA), "columnpred", paste(AA))
   column.ana<-metric
@@ -1714,7 +1714,7 @@ results<-function(data,AA = NULL, metric = "totalmoose"){
 #'
 #' @examples
 results.comp<-function(data,AA = NULL,num,denom){
-  for (i in 1:ncol(data)) if(!is.factor(data[,i])) data[is.na(data[,i]),i] <- 0
+  for (i in 1:ncol(data)) if(!is.factor(data[,i]) && !isUnknown(data[,i])) data[is.na(data[,i]),i] <- 0
   data$columnpred <- 1
   column.pred <- ifelse(is.null(AA), "columnpred", paste(AA))
   column.ana<-"totalmoose"
@@ -1757,7 +1757,7 @@ results.comp<-function(data,AA = NULL,num,denom){
 #' @export
 #'
 #' @examples
-AA_abundance <- function(data, column_names,...) {
+AA_abundance <- function(data, column_names = NULL,...) {
   AA<-c("columnpred",column_names)
   out.all <- list()
 
@@ -1801,7 +1801,7 @@ AA_abundance <- function(data, column_names,...) {
 #' @export
 #'
 #' @examples
-AA_tables <- function(data, column_names, ...) {
+AA_tables <- function(data, column_names = NULL) {
   AA<-c("columnpred",column_names)
 
 

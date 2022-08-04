@@ -54,7 +54,7 @@ exitFS.call(document);
 
 
 header <- dashboardHeader(title = "Moose Manager")
-sidebar <- dashboardSidebar(uiOutput("sidebarpanel"))
+sidebar <- dashboardSidebar(uiOutput("sidebarpanel"), collapsed = T)
 body <- dashboardBody(uiOutput("body"))
 ui <- dashboardPage(header, sidebar, body)
 
@@ -81,7 +81,6 @@ textStyle <- element_text(face = "bold.italic", color = "black", size = 20)
 ##################################################################
 
 login <- box(
-    title = "Login",
     textInput("userName", "Username"),
     passwordInput("passwd", "Password"),
     br(),
@@ -128,7 +127,7 @@ server<-shinyServer(function(input, output, session) {
     output$sidebarpanel <- renderUI({
         if (USER$Logged == TRUE) {
             div(
-                shinydashboard::dashboardSidebar(
+                shinydashboard::dashboardSidebar(collapsed = TRUE,
                         sidebarMenu(
                             menuItem("GSPE Moose Predictions", tabName="GSPE")
 
@@ -142,9 +141,16 @@ server<-shinyServer(function(input, output, session) {
     output$body <- renderUI({
         if (USER$Logged == TRUE) {
                 dashboardBody(
-                  fluidRow(column(12,
-                  box(
-                    h1("Browse for surveys"),
+            tabsetPanel(
+                id = "tabs",
+                tabPanel(
+                    value = "Survey Search",
+                    title = "Survey Search",
+
+                    box(    width = 12,
+                            title = "Browse for Surveys",
+                            status = "primary",
+                            solidHeader = TRUE,
                     h3("Select a survey in the table to view/download survey data"),
                     textInput("keyword", "Search in column surveyname:",12),
                     fluidRow(column(width = 4,
@@ -165,54 +171,62 @@ server<-shinyServer(function(input, output, session) {
                                                                   view = "years", #editing what the popup calendar shows when it opens
                                                                   minView = "years", #making it not possible to go down to a "months" view and pick the wrong date
                                                                   dateFormat = "yyyy"))),
-                    DT::dataTableOutput("tbl")))),
-                  fluidRow(column(12,
-                  box(
-                    h1("Survey Data"),
-                    DT::dataTableOutput("survey_data")))),
-                  fluidRow(box(
-                    h1(strong("GeoSpatial Population Estimate")),
+                    DT::dataTableOutput("tbl"),
+                    uiOutput("survey_action")%>% withSpinner(color="#0dc5c1"))),
+                tabPanel(
+                    value = "View/download survey data",
+                title = "View/download survey data",
+                  box(width = 12,
+                      title = "Survey Data",
+                      status = "primary",
+                      solidHeader = TRUE,
+                    DT::dataTableOutput("survey_data"))),
+                tabPanel(
+                    value = "Single survey GSPE details",
+                    title = "Single survey GSPE details",
+                  box(width = 12,
+                      title = "GeoSpatial Population Estimate",
+                      status = "primary",
+                      solidHeader = TRUE,
                     uiOutput("columns"),
-                    pickerInput("plot_AA", "Analysis Area", choices = "Total_Survey", selected = "Total_Survey", multiple = FALSE),
-                    selectInput("metric", "Which demographic?", choices = c("totalmoose", "TotalBulls", "TotalCows", "TotalCalves"), selected = "totalmoose", multiple = FALSE),
-                                             box(width = 12,
-                                                 checkboxInput("sightability", "Use sightability correction factor", value = FALSE),
-                                                 column(width=3,
-                                                        numericInput("high_trials", "Number of High Stratum Sightability Trials", value = 0, min = 1, step = 1)
-                                                 ),
-                                                 column(width=3,
-                                                        numericInput("high_missed", "Number of High Stratum Moose Missed", value = 0, min = 1, step = 1)
-                                                 ),
-                                                 column(width=3,
-                                                        numericInput("low_trials", "Number of Low Stratum Sightability Trials", value = 0, min = 1, step = 1)
-                                                 ),
-                                                 column(width=3,
-                                                        numericInput("low_missed", "Number of Low Stratum Moose Missed", value = 0, min = 1, step = 1)
-                                                 ),
-                                                 h4(strong("Total Abundance")),
-                                                 fluidRow(box(width = 12,
+                    box(width = 12,
+                        checkboxInput("sightability", "Use sightability correction factor", value = FALSE),
+                        column(width=3,
+                               numericInput("high_trials", "Number of High Stratum Sightability Trials", value = 0, min = 1, step = 1)
+                               ),
+                        column(width=3,
+                               numericInput("high_missed", "Number of High Stratum Moose Missed", value = 0, min = 1, step = 1)
+                               ),
+                        column(width=3,
+                               numericInput("low_trials", "Number of Low Stratum Sightability Trials", value = 0, min = 1, step = 1)
+                               ),
+                        column(width=3,
+                               numericInput("low_missed", "Number of Low Stratum Moose Missed", value = 0, min = 1, step = 1)
+                               )
+                        ),
+                    box(width = 12,
+                        h4(strong("Total Abundance")),
+                        DT::dataTableOutput("GSPE_table_abundance_SCF")%>% withSpinner(color="#0dc5c1") ,
+                        h4(strong("Bull:Cow Composition")),
+                        DT::dataTableOutput("GSPE_table_bullcow")%>% withSpinner(color="#0dc5c1"),
+                        h4(strong("Calf:Cow Composition")),
+                        DT::dataTableOutput("GSPE_table_calfcow")%>% withSpinner(color="#0dc5c1")),
+                    box(width = 12,
+                        h4(strong("Abundance Heatmap")),
+                        selectInput("metric", "Which demographic?", choices = c("totalmoose", "TotalBulls", "TotalCows", "TotalCalves"), selected = "totalmoose", multiple = FALSE),
+                        plotOutput("GSPE_plot", height = "1000px") %>% withSpinner(color="#0dc5c1"))
+                  )),
+                tabPanel(
+                    value = "Trend analysis",
+                    title = "Trend analysis"),
+                tabPanel(
+                    value = "Plan a survey like this one",
+                    title = "Plan a survey like this one"
+                )
+                )
+                )
 
-                                                              column(width=12,
-                                                                     DT::dataTableOutput("GSPE_table_abundance_SCF")%>% withSpinner(color="#0dc5c1")
-                                                              )
-                                                 )),
 
-                                                 h4(strong("Bull:Cow Composition")),
-                                                 fluidRow(box(width = 12,
-                                                              column(width=12,
-                                                                     DT::dataTableOutput("GSPE_table_bullcow")%>% withSpinner(color="#0dc5c1")
-                                                              )
-                                                 )),
-                                                 h4(strong("Calf:Cow Composition")),
-                                                 fluidRow(box(width = 12,
-                                                              column(width=12,
-                                                                     DT::dataTableOutput("GSPE_table_calfcow")%>% withSpinner(color="#0dc5c1")
-                                                              )
-                                                 ))),
-                                             box(width = 12,
-                                                        plotOutput("GSPE_plot", height = "1000px") %>% withSpinner(color="#0dc5c1"))
-
-                                )))
         } else {
             login
         }
@@ -245,32 +259,56 @@ server<-shinyServer(function(input, output, session) {
                   selection = 'single'
                   , options = list(
                       dom = "Blfrtip"
-                      , buttons =
+                      , iDisplayLength = 10,
+                      buttons =
                           list("copy", list(
-                              extend = "collection"
-                              , buttons = c("csv", "excel", "pdf")
-                              , text = "Download"
+                              extend = "collection" ,
+                              buttons = c("csv", "excel", "pdf"),
+                              text = "Download",
+                              exportOptions = list(
+                                  modifier = list(page = "all")
+                              )
                           ) )), rownames = FALSE)
 
 
     })
+
+    output$survey_action<-renderUI({
+        req(input$tbl_rows_selected)
+        radioGroupButtons(
+            inputId = "survey_action",
+            label = "What would you like to do with this survey?",
+            choices = c("View/download survey data", "Single survey GSPE details", "Trend analysis", "Plan a survey like this one"),
+            status = "primary",
+            selected = NULL
+        )})
+
+
+    observeEvent(input$survey_action, {
+        updateTabsetPanel(session = session, inputId = "tabs", selected = input$survey_action)
+    })
+
 
     moose.dat<-reactive({
         req(input$tbl_rows_selected)
         survey_ids <- searched_surveys()[input$tbl_rows_selected,"surveyid"]
         query<-paste("exec spr_wc_moosepop_reprospreadsheet @surveyIDlist = '", survey_ids,"'", sep = "")
         moose.dat <- dbGetQuery(moose, query)
+
         moose.dat})
 
         # out <- by(data=moose.dat,as.factor(moose.dat$Surveyyear),FUN=function(x){
         #     results(x)
         # })
-        output$columns<-renderUI(pickerInput(inputId = "columns", choices = names(moose.dat()), multiple = TRUE))
+
+
+
+        output$columns<-renderUI(pickerInput(inputId = "columns", label = "Identify analysis area columns", choices = names(moose.dat()), multiple = TRUE))
 
         output$survey_data<- DT::renderDataTable(server = FALSE, {moose.dat()}, options = list(
           dom = "Blfrtip",
           scrollX = T,
-          iDisplayLength = 5,
+          iDisplayLength = 10,
           buttons =
             list("copy", list(
               extend = "collection" ,
@@ -284,27 +322,9 @@ server<-shinyServer(function(input, output, session) {
 
 
 
-
-
-    observeEvent(input$columns,{
-
-        updatePickerInput(session = session, inputId = "plot_AA", choices = c("Total_Survey", input$columns), selected = "Total_Survey")
-    })
-
-
-
-
-
     td<-reactive(AA_tables(moose.dat(), input$columns))
 
     metric<-reactive(input$metric)
-
-    metric_label<-reactive(case_when(metric() == "totalmoose" ~ "Total",
-                                     metric() == "TotalBulls" ~ "Bull",
-                                     metric() == "TotalCows" ~ "Cow",
-                                     metric() == "TotalCalves" ~ "Calf"))
-
-
 
 
     output$GSPE_plot <- renderPlot({
@@ -341,13 +361,11 @@ server<-shinyServer(function(input, output, session) {
         plot_data<- cbind(plot_data, surv_results_predictions[,4:5])
 
 
-        plot_data$Total_Survey<-1
-        rows<- as.numeric(unique(unlist(map(1:length(input$plot_AA), ~ which(plot_data[,input$plot_AA[.x]] == 1)))))
 
 
 
-        pred_plot<-ggmap(A)+geom_tile(data = plot_data[rows,], aes(x=centrlon,y=centrlat,fill= log(Est+1)),alpha= 1,colour="black")+
-            geom_text(data=subset(plot_data[rows,], Counted== TRUE),aes_string(x="centrlon",y="centrlat",label= input$metric), color = "white", size = 5)+
+        pred_plot<-ggmap(A)+geom_tile(data = plot_data, aes(x=centrlon,y=centrlat,fill= log(Est+1)),alpha= 1,colour="black")+
+            geom_text(data=subset(plot_data, Counted== TRUE),aes_string(x="centrlon",y="centrlat",label= input$metric), color = "white", size = 5)+
             ggtitle(paste(plot_data$SurveyName),subtitle = paste(plot_data$Surveyyear, plot_data$Season, "Predicted", metric_label,"Moose Abundance"))+
             labs(x = "", y = "", fill = "Moose")+
             scale_fill_gradient(breaks = log(c(0, 5, 15, 30, 60, 120, 200)+1),
@@ -369,26 +387,18 @@ server<-shinyServer(function(input, output, session) {
 
 
 
-    output$GSPE_table_abundance<-DT::renderDataTable({
-
-        table_data<-td()
-
-        abundance_data<-case_when(metric() == "totalmoose" ~ "total_abundance",
-                                  metric() == "TotalBulls" ~ "bull_abundance",
-                                  metric() == "TotalCows" ~ "cow_abundance",
-                                  metric() == "TotalCalves" ~ "calf_abundance")
-        as.data.frame(table_data[[abundance_data]])
-
-    }, options = list(dom = 't'),rownames = FALSE)
-
-
     output$GSPE_table_abundance_SCF<-DT::renderDataTable({
         table_data<-td()
 
-        abundance_data<-case_when(metric() == "totalmoose" ~ "total_abundance",
-                                  metric() == "TotalBulls" ~ "bull_abundance",
-                                  metric() == "TotalCows" ~ "cow_abundance",
-                                  metric() == "TotalCalves" ~ "calf_abundance")
+        abundance_data<-
+        as.data.frame(rbind(table_data[["total_abundance"]],
+                            table_data[["cow_abundance"]],
+                            table_data[["bull_abundance"]],
+                            table_data[["calf_abundance"]])) %>%
+            mutate(Metric = rep(c("Total", "Cows", "Bulls", "Calves"), each = length(input$columns)+1)) %>%
+            relocate(Metric, .after = Area)
+
+
         scf<-map(1:(length(input$columns)+1), ~
                      scf.apply1(hi.est = as.numeric(as.data.frame(table_data[["total_abundance"]])$High.Est[.x]),
                                 lo.est = as.numeric(as.data.frame(table_data[["total_abundance"]])$Low.Est[.x]),
@@ -400,8 +410,8 @@ server<-shinyServer(function(input, output, session) {
                                 n.seen.lo = input$low_trials - input$low_missed))
 
         scf <- ldply(scf, data.frame)
-        SCF<-as.data.frame(table_data[[abundance_data]])
-        SCF$Area<-as.data.frame(table_data[[abundance_data]])$Area
+        SCF<-as.data.frame(table_data[["total_abundance"]])
+        SCF$Area<-as.data.frame(table_data[["total_abundance"]])$Area
         SCF$Total.Est<-scf$tot.moose
         SCF$High.Est<-scf$tot.hi
         SCF$Low.Est<-scf$tot.lo
@@ -415,7 +425,7 @@ server<-shinyServer(function(input, output, session) {
         SCF[,8:10]<-round(SCF[,8:10],2)
 
         if(input$sightability == FALSE)
-            return(as.data.frame(table_data[["total_abundance"]]))
+            return(abundance_data)
         SCF
     }, options = list(dom = 't'),rownames = FALSE)
 
