@@ -292,6 +292,19 @@ server<-shinyServer(function(input, output, session) {
     moose.dat<-reactive({
         req(input$tbl_rows_selected)
         survey_ids <- searched_surveys()[input$tbl_rows_selected,"surveyid"]
+
+        Username <- isolate(input$userName)
+        Password <- isolate(input$passwd)
+        moose <- odbc::dbConnect(odbc(),
+                                 Driver = "SQL Server",
+                                 Server = "DWCDBP",
+                                 Database= "WC_moosepop",
+                                 # UID = Username,
+                                 # PWD = Password,
+                                 trusted_connection = "true",
+                                 Port = 1443,
+                                 TDS_Version = 7.2)
+
         query<-paste("exec spr_wc_moosepop_reprospreadsheet @surveyIDlist = '", survey_ids,"'", sep = "")
         moose.dat <- dbGetQuery(moose, query)
 
