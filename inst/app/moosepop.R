@@ -945,6 +945,7 @@ moosepop.composition<-
 function(column.numerator, column.denominator, strat, data,
 	sampled, area, column.pred)
 {
+  data[,strat] <- as.factor(data[,strat])
 	data.s <- data[!is.na(data[, sampled]) & data[, sampled] == 1, ]
 	cds <- as.integer(data.s[,strat])
 	cdu <- as.integer(data[,strat])
@@ -1297,7 +1298,7 @@ geo.moosepop.composition<-
 function(column.numerator, column.denominator, strat, data,
 	sampled, area, column.pred, column.lat, column.lon)
 {
-
+  data[,strat] <- as.factor(data[,strat])
 	data <- cbind(data,
 		LL.to.ARBUTM(mean(data[,column.lon]), data[,column.lat],
 		data[,column.lon]) )

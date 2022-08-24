@@ -151,7 +151,7 @@ server<-shinyServer(function(input, output, session) {
                             title = "Browse for Surveys",
                             status = "primary",
                             solidHeader = TRUE,
-                    h3("Select a survey in the table to view/download survey data"),
+                    h3("Select a survey in the table, then use the tabs above to navigate functions"),
                     textInput("keyword", "Search in column surveyname:",12),
                     fluidRow(column(width = 4,
                                     airDatepickerInput("surveyyear_min",
@@ -171,8 +171,7 @@ server<-shinyServer(function(input, output, session) {
                                                                   view = "years", #editing what the popup calendar shows when it opens
                                                                   minView = "years", #making it not possible to go down to a "months" view and pick the wrong date
                                                                   dateFormat = "yyyy"))),
-                    DT::dataTableOutput("tbl"),
-                    uiOutput("survey_action")%>% withSpinner(color="#0dc5c1"))),
+                    DT::dataTableOutput("tbl"))),
                 tabPanel(
                     value = "View/download survey data",
                 title = "View/download survey data",
@@ -227,6 +226,7 @@ server<-shinyServer(function(input, output, session) {
                 )
 
 
+
         } else {
             login
         }
@@ -234,10 +234,8 @@ server<-shinyServer(function(input, output, session) {
 
 
 
-    searched_surveys <- reactive({
-        query<-paste("SELECT DISTINCT surveyid, surveyname, surveyyear
-    FROM v_wc_moosepop_reprospreadsheet
-    WHERE surveyname like '", input$keyword,"%' AND surveyyear BETWEEN ",year(input$surveyyear_min), " AND ", year(input$surveyyear_max),sep="")
+
+    moose<-reactive({
         Username <- isolate(input$userName)
         Password <- isolate(input$passwd)
         moose <- odbc::dbConnect(odbc(),
@@ -249,7 +247,15 @@ server<-shinyServer(function(input, output, session) {
                                  trusted_connection = "true",
                                  Port = 1443,
                                  TDS_Version = 7.2)
-        all.id.list <- dbGetQuery(moose,query)
+        moose
+    })
+
+    searched_surveys <- reactive({
+        query<-paste("SELECT DISTINCT surveyid, surveyname, surveyyear
+    FROM v_wc_moosepop_reprospreadsheet
+    WHERE surveyname like '", input$keyword,"%' AND surveyyear BETWEEN ",year(input$surveyyear_min), " AND ", year(input$surveyyear_max),sep="")
+
+        all.id.list <- dbGetQuery(moose(),query)
         all.id.list
 
     })
@@ -273,27 +279,11 @@ server<-shinyServer(function(input, output, session) {
 
     })
 
-    output$survey_action<-renderUI({
-        req(input$tbl_rows_selected)
-        radioGroupButtons(
-            inputId = "survey_action",
-            label = "What would you like to do with this survey?",
-            choices = c("View/download survey data", "Single survey GSPE details", "Trend analysis", "Plan a survey like this one"),
-            status = "primary",
-            selected = NULL
-        )})
-
-
-    observeEvent(input$survey_action, {
-        updateTabsetPanel(session = session, inputId = "tabs", selected = input$survey_action)
-    })
-
-
     moose.dat<-reactive({
         req(input$tbl_rows_selected)
         survey_ids <- searched_surveys()[input$tbl_rows_selected,"surveyid"]
         query<-paste("exec spr_wc_moosepop_reprospreadsheet @surveyIDlist = '", survey_ids,"'", sep = "")
-        moose.dat <- dbGetQuery(moose, query)
+        moose.dat <- dbGetQuery(moose(), query)
 
         moose.dat})
 
@@ -303,9 +293,13 @@ server<-shinyServer(function(input, output, session) {
 
 
 
-        output$columns<-renderUI(pickerInput(inputId = "columns", label = "Identify analysis area columns", choices = names(moose.dat()), multiple = TRUE))
+        output$columns<-renderUI({
+pickerInput(inputId = "columns", label = "Identify analysis area columns", choices = names(moose.dat()), multiple = TRUE)})
 
-        output$survey_data<- DT::renderDataTable(server = FALSE, {moose.dat()}, options = list(
+        output$survey_data<- DT::renderDataTable(server = FALSE, {
+            validate(need(!is.null(input$tbl_rows_selected), "\nSelect a survey from the Survey Search tab."))
+            moose.dat()},
+            options = list(
           dom = "Blfrtip",
           scrollX = T,
           iDisplayLength = 10,
@@ -322,12 +316,17 @@ server<-shinyServer(function(input, output, session) {
 
 
 
-    td<-reactive(AA_tables(moose.dat(), input$columns))
+    td<-reactive({
+        req(input$tbl_rows_selected)
+
+        AA_tables(moose.dat(), input$columns)})
 
     metric<-reactive(input$metric)
 
 
     output$GSPE_plot <- renderPlot({
+        validate(need(!is.null(input$tbl_rows_selected), "\nSelect a survey from the Survey Search tab."))
+
         plot_data<-moose.dat()
         table_data<-td()
 
@@ -388,6 +387,9 @@ server<-shinyServer(function(input, output, session) {
 
 
     output$GSPE_table_abundance_SCF<-DT::renderDataTable({
+        validate(need(!is.null(input$tbl_rows_selected), "\nSelect a survey from the Survey Search tab."))
+
+
         table_data<-td()
 
         abundance_data<-
@@ -431,6 +433,7 @@ server<-shinyServer(function(input, output, session) {
 
 
     output$GSPE_table_bullcow<-DT::renderDataTable({
+
         table_data<-td()
 
         table_data$bullcow}, options = list(dom = 't'),rownames = FALSE)
@@ -444,3 +447,6 @@ server<-shinyServer(function(input, output, session) {
 
 # Run the application
 shinyApp(ui = ui, server = server)
+
+
+
