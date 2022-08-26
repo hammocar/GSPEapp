@@ -238,15 +238,18 @@ server<-shinyServer(function(input, output, session) {
     moose<-reactive({
         Username <- isolate(input$userName)
         Password <- isolate(input$passwd)
-        moose <- odbc::dbConnect(odbc(),
-                                 Driver = "SQL Server",
-                                 Server = "DWCDBP",
-                                 Database= "WC_moosepop",
-                                 UID = Username,
-                                 PWD = Password,
-                                 trusted_connection = "true",
-                                 Port = 1443,
-                                 TDS_Version = 7.2)
+
+        moose <- DBI::dbConnect(
+          odbc::odbc(),
+          Driver      = "SQL Server",
+          Server = "DFGJNUSQL-DB72P",
+          Database= "WC_moosepop",
+          # Uid         = Username,
+          # Pwd         = Password,
+          Trusted_Connection = "True",
+          Port        = 1433,
+          # TDS_Version = 8.0
+        )
         moose
     })
 
@@ -285,15 +288,17 @@ server<-shinyServer(function(input, output, session) {
 
         Username <- isolate(input$userName)
         Password <- isolate(input$passwd)
-        moose <- odbc::dbConnect(odbc(),
-                                 Driver = "SQL Server",
-                                 Server = "DWCDBP",
-                                 Database= "WC_moosepop",
-                                 # UID = Username,
-                                 # PWD = Password,
-                                 trusted_connection = "true",
-                                 Port = 1443,
-                                 TDS_Version = 7.2)
+        moose <- DBI::dbConnect(
+          odbc::odbc(),
+          Driver      = "SQL Server",
+          Server = "DFGJNUSQL-DB72P",
+          Database= "WC_moosepop",
+          # Uid         = ,
+          # Pwd         = ,
+          Trusted_Connection = "True",
+          Port        = 1433,
+          # TDS_Version = 8.0
+        )
 
         query<-paste("exec spr_wc_moosepop_reprospreadsheet @surveyIDlist = '", survey_ids,"'", sep = "")
         moose.dat <- dbGetQuery(moose(), query)
