@@ -54,7 +54,7 @@ exitFS.call(document);
 
 
 header <- dashboardHeader(title = "Moose Manager")
-sidebar <- dashboardSidebar(uiOutput("sidebarpanel"), collapsed = T)
+sidebar <- dashboardSidebar(uiOutput("sidebarpanel"), collapsed = F)
 body <- dashboardBody(uiOutput("body"))
 ui <- dashboardPage(header, sidebar, body)
 
@@ -129,7 +129,10 @@ server<-shinyServer(function(input, output, session) {
             div(
                 shinydashboard::dashboardSidebar(collapsed = TRUE,
                         sidebarMenu(
-                            menuItem("GSPE Moose Predictions", tabName="GSPE")
+                            menuItem("Surveys", tabName="GSPE"),
+                            menuItem("Survival", tabName="Survival"),
+                            menuItem("Twinning", tabName="Twinning"),
+                            menuItem("Browse", tabName="Browse")
 
                         )
 
@@ -151,7 +154,7 @@ server<-shinyServer(function(input, output, session) {
                             title = "Browse for Surveys",
                             status = "primary",
                             solidHeader = TRUE,
-                    h3("Select a survey in the table, then use the tabs above to navigate functions"),
+                    h3("Select a survey in the table"),
                     textInput("keyword", "Search in column surveyname:",12),
                     fluidRow(column(width = 4,
                                     airDatepickerInput("surveyyear_min",
@@ -171,57 +174,8 @@ server<-shinyServer(function(input, output, session) {
                                                                   view = "years", #editing what the popup calendar shows when it opens
                                                                   minView = "years", #making it not possible to go down to a "months" view and pick the wrong date
                                                                   dateFormat = "yyyy"))),
-                    DT::dataTableOutput("tbl"))),
-                tabPanel(
-                    value = "View/download survey data",
-                title = "View/download survey data",
-                  box(width = 12,
-                      title = "Survey Data",
-                      status = "primary",
-                      solidHeader = TRUE,
-                    DT::dataTableOutput("survey_data"))),
-                tabPanel(
-                    value = "Single survey GSPE details",
-                    title = "Single survey GSPE details",
-                  box(width = 12,
-                      title = "GeoSpatial Population Estimate",
-                      status = "primary",
-                      solidHeader = TRUE,
-                    uiOutput("columns"),
-                    box(width = 12,
-                        checkboxInput("sightability", "Use sightability correction factor", value = FALSE),
-                        column(width=3,
-                               numericInput("high_trials", "Number of High Stratum Sightability Trials", value = 0, min = 1, step = 1)
-                               ),
-                        column(width=3,
-                               numericInput("high_missed", "Number of High Stratum Moose Missed", value = 0, min = 1, step = 1)
-                               ),
-                        column(width=3,
-                               numericInput("low_trials", "Number of Low Stratum Sightability Trials", value = 0, min = 1, step = 1)
-                               ),
-                        column(width=3,
-                               numericInput("low_missed", "Number of Low Stratum Moose Missed", value = 0, min = 1, step = 1)
-                               )
-                        ),
-                    box(width = 12,
-                        h4(strong("Total Abundance")),
-                        DT::dataTableOutput("GSPE_table_abundance_SCF")%>% withSpinner(color="#0dc5c1") ,
-                        h4(strong("Bull:Cow Composition")),
-                        DT::dataTableOutput("GSPE_table_bullcow")%>% withSpinner(color="#0dc5c1"),
-                        h4(strong("Calf:Cow Composition")),
-                        DT::dataTableOutput("GSPE_table_calfcow")%>% withSpinner(color="#0dc5c1")),
-                    box(width = 12,
-                        h4(strong("Abundance Heatmap")),
-                        selectInput("metric", "Which demographic?", choices = c("totalmoose", "TotalBulls", "TotalCows", "TotalCalves"), selected = "totalmoose", multiple = FALSE),
-                        plotOutput("GSPE_plot", height = "1000px") %>% withSpinner(color="#0dc5c1"))
-                  )),
-                tabPanel(
-                    value = "Trend analysis",
-                    title = "Trend analysis"),
-                tabPanel(
-                    value = "Plan a survey like this one",
-                    title = "Plan a survey like this one"
-                )
+                    DT::dataTableOutput("tbl"),
+                    uiOutput("survey_action")%>% withSpinner(color="#0dc5c1")))
                 )
                 )
 
@@ -281,6 +235,83 @@ server<-shinyServer(function(input, output, session) {
 
 
     })
+    output$survey_action<-renderUI({
+      req(input$tbl_rows_selected)
+      actionGroupButtons(
+        inputIds = c("survey_data", "GSPE", "Trend", "Plan"),
+        labels = c("View/download survey data", "Single survey GSPE details", "Trend analysis", "Plan a survey like this one"),
+        status = "primary"
+      )})
+
+
+    observeEvent(input$survey_action, {
+      updateTabsetPanel(session = session, inputId = "tabs", selected = input$survey_action)
+    })
+
+    observeEvent(input$survey_data , {
+      appendTab("tabs",
+                tabPanel(
+                  value = "View/download survey data",
+                  title = "View/download survey data",
+                  box(width = 12,
+                      title = "Survey Data",
+                      status = "primary",
+                      solidHeader = TRUE,
+                      DT::dataTableOutput("survey_data"))), select=TRUE)
+    })
+
+    observeEvent(input$GSPE , {
+      appendTab("tabs",
+                tabPanel(
+                  value = "Single survey GSPE details",
+                  title = "Single survey GSPE details",
+                  box(width = 12,
+                      title = "GeoSpatial Population Estimate",
+                      status = "primary",
+                      solidHeader = TRUE,
+                      uiOutput("columns"),
+                      box(width = 12,
+                          checkboxInput("sightability", "Use sightability correction factor", value = FALSE),
+                          column(width=3,
+                                 numericInput("high_trials", "Number of High Stratum Sightability Trials", value = 0, min = 1, step = 1)
+                          ),
+                          column(width=3,
+                                 numericInput("high_missed", "Number of High Stratum Moose Missed", value = 0, min = 1, step = 1)
+                          ),
+                          column(width=3,
+                                 numericInput("low_trials", "Number of Low Stratum Sightability Trials", value = 0, min = 1, step = 1)
+                          ),
+                          column(width=3,
+                                 numericInput("low_missed", "Number of Low Stratum Moose Missed", value = 0, min = 1, step = 1)
+                          )
+                      ),
+                      box(width = 12,
+                          h4(strong("Total Abundance")),
+                          DT::dataTableOutput("GSPE_table_abundance_SCF")%>% withSpinner(color="#0dc5c1") ,
+                          h4(strong("Bull:Cow Composition")),
+                          DT::dataTableOutput("GSPE_table_bullcow")%>% withSpinner(color="#0dc5c1"),
+                          h4(strong("Calf:Cow Composition")),
+                          DT::dataTableOutput("GSPE_table_calfcow")%>% withSpinner(color="#0dc5c1")),
+                      box(width = 12,
+                          h4(strong("Abundance Heatmap")),
+                          selectInput("metric", "Which demographic?", choices = c("totalmoose", "TotalBulls", "TotalCows", "TotalCalves"), selected = "totalmoose", multiple = FALSE),
+                          plotOutput("GSPE_plot", height = "1000px") %>% withSpinner(color="#0dc5c1"))
+                  )), select=TRUE)
+    })
+
+
+    observeEvent(input$Trend , {
+    appendTab("tabs",
+    tabPanel(
+      value = "Trend analysis",
+      title = "Trend analysis"), select=TRUE)})
+
+    observeEvent(input$Plan , {
+      appendTab("tabs",
+                tabPanel(
+                  value = "Plan a survey like this one",
+                  title = "Plan a survey like this one"
+                ), select=TRUE)})
 
     moose.dat<-reactive({
         req(input$tbl_rows_selected)
