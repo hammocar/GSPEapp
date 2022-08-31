@@ -144,6 +144,9 @@ server<-shinyServer(function(input, output, session) {
     output$body <- renderUI({
         if (USER$Logged == TRUE) {
                 dashboardBody(
+                  tags$head(
+                    tags$style(HTML(".main-sidebar { font-size: 20px; }")) #change the font size to 20
+                  ),
             tabsetPanel(
                 id = "tabs",
                 tabPanel(
@@ -175,6 +178,7 @@ server<-shinyServer(function(input, output, session) {
                                                                   minView = "years", #making it not possible to go down to a "months" view and pick the wrong date
                                                                   dateFormat = "yyyy"))),
                     DT::dataTableOutput("tbl"),
+                    uiOutput("columns"),
                     uiOutput("survey_action")%>% withSpinner(color="#0dc5c1")))
                 )
                 )
@@ -243,10 +247,9 @@ server<-shinyServer(function(input, output, session) {
         status = "primary"
       )})
 
-
-    observeEvent(input$survey_action, {
-      updateTabsetPanel(session = session, inputId = "tabs", selected = input$survey_action)
-    })
+    output$columns<-renderUI({
+      req(input$tbl_rows_selected)
+      pickerInput(inputId = "columns", label = "Identify analysis area columns (if any)", choices = names(moose.dat()), multiple = TRUE)})
 
     observeEvent(input$survey_data , {
       appendTab("tabs",
@@ -263,13 +266,12 @@ server<-shinyServer(function(input, output, session) {
     observeEvent(input$GSPE , {
       appendTab("tabs",
                 tabPanel(
-                  value = "Single survey GSPE details",
-                  title = "Single survey GSPE details",
+                  value = paste("GSPE details:", moose.dat()$SurveyName[1], " ", moose.dat()$Surveyyear[1]),
+                  title = paste("GSPE details:", moose.dat()$SurveyName[1], " ", moose.dat()$Surveyyear[1]),
                   box(width = 12,
                       title = "GeoSpatial Population Estimate",
                       status = "primary",
                       solidHeader = TRUE,
-                      uiOutput("columns"),
                       box(width = 12,
                           checkboxInput("sightability", "Use sightability correction factor", value = FALSE),
                           column(width=3,
@@ -342,8 +344,7 @@ server<-shinyServer(function(input, output, session) {
 
 
 
-        output$columns<-renderUI({
-pickerInput(inputId = "columns", label = "Identify analysis area columns", choices = names(moose.dat()), multiple = TRUE)})
+
 
         output$survey_data<- DT::renderDataTable(server = FALSE, {
             validate(need(!is.null(input$tbl_rows_selected), "\nSelect a survey from the Survey Search tab."))
