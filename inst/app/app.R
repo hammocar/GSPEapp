@@ -19,6 +19,8 @@ library(gtools)
 library(stringr)
 library(PracTools)
 library(purrr)
+library(dbplyr)
+library(RColorBrewer)
 library(dplyr)
 library(tidyr)
 library(kableExtra)
@@ -29,6 +31,7 @@ library(tools)
 library(DBI)
 library(odbc)
 library(lubridate)
+
 
 source("moosepop.R")
 # source("D:/Projects/Moose/Surveys/John's Code/GSPEandMoosePopCode.r")
@@ -129,7 +132,7 @@ server<-shinyServer(function(input, output, session) {
             div(
                 shinydashboard::dashboardSidebar(collapsed = TRUE,
                         sidebarMenu(
-                            menuItem("Surveys", tabName="GSPE"),
+                            menuItem("Abundance", tabName="GSPE"),
                             menuItem("Survival", tabName="Survival"),
                             menuItem("Twinning", tabName="Twinning"),
                             menuItem("Browse", tabName="Browse")
@@ -306,7 +309,14 @@ server<-shinyServer(function(input, output, session) {
     appendTab("tabs",
     tabPanel(
       value = "Trend analysis",
-      title = "Trend analysis"), select=TRUE)})
+      title = "Trend analysis",
+      box(width = 12,
+          title = "",
+          status = "primary",
+          solidHeader = TRUE,
+          DT::dataTableOutput("trend_data_selection")%>% withSpinner(color="#0dc5c1"),
+          uiOutput("remove_from_trend"),
+          plotOutput("matching_abundance_plot"))), select=TRUE)})
 
     observeEvent(input$Plan , {
       appendTab("tabs",
@@ -492,6 +502,155 @@ server<-shinyServer(function(input, output, session) {
         table_data<-td()
 
         table_data$calfcow}, options = list(dom = 't'),rownames = FALSE)
+
+
+    trend_data_selection<-eventReactive(c(input$tbl_rows_selected,input$Trend),{
+
+
+      # Extract Unit IDs to search
+      unit_IDs<-moose.dat()$UnitID
+      l<-length(unit_IDs)
+
+
+      # Find surveys that at least PARTIALLY include area of interest
+      partial <-
+        tbl(moose(), "v_wc_moosepop_reprospreadsheet") %>%
+        try %>%
+        filter(UnitID %in% unit_IDs) %>%
+        collect() %>%
+        dplyr::select(SurveyID)
+
+
+
+      survey_IDs_partial<- unique(partial$SurveyID)
+
+
+      # Get all survey data from the partial matches
+      partial_match_data <- dbGetQuery(moose(),
+                                       paste("exec spr_wc_moosepop_reprospreadsheet @SurveyIDList = '",
+                                             paste(as.character(survey_IDs_partial), sep="' '", collapse=", "),
+                                             "'", sep = ""))
+
+      # Identify only the surveys that include the entire AA
+      partial_match_data<-
+        partial_match_data %>%
+        filter(UnitID %in% unit_IDs) %>%
+        group_by(SurveyID, SurveyName, Surveyyear) %>%
+        dplyr::summarise(n = n()) %>%
+        ungroup() %>%
+        dplyr::filter(n == l)
+
+      # Get the survey data for the surveys that include the entire AA
+      exact_match_data <- dbGetQuery(moose(),
+                                     paste("exec spr_wc_moosepop_reprospreadsheet @SurveyIDList = '",
+                                           paste(as.character(partial_match_data$SurveyID), sep="' '", collapse=", "),
+                                           "'", sep = ""))
+
+
+      exact_match_data$AA<-0
+      exact_match_data[is.element(exact_match_data$UnitID, unit_IDs),"AA"]<-1
+
+      # Create a function that will run and can be mapped even if there's an error in a survey
+      flexible_AA_tables<-possibly(AA_tables, otherwise = NULL)
+
+      # Run all of the estimates
+      out.all <- dlply(exact_match_data, .(SurveyID),.fun=function(x)flexible_AA_tables(x, column_names = "AA"))
+
+      # Extract just the total abundance estimate
+      trend_data<-map_df(out.all,  1)
+
+
+      trend_data$SurveyID<-rep(as.integer(names(out.all[!sapply( out.all, function(x) length(x) == 0 )])), each = 2)
+      trend_data<-left_join(trend_data, partial_match_data) %>% filter(Area == "AA")
+
+      # Deal with multiple surveys in the same year
+      trend_data<-
+        trend_data %>%
+        group_by(Surveyyear) %>%
+        dplyr::mutate(redundant_name = SurveyName,
+                      redundant = length(Surveyyear),
+                      equal_estimates =length(unique(Total.Est)) == 1 & length(unique(Total.SE)) == 1)
+
+      trend_data[trend_data$redundant == 1 |trend_data$equal_estimates == TRUE , "redundant_name"]<-""
+      trend_data
+    })
+
+    output$trend_data_selection_table<-DT::renderDataTable({
+      datatable(trend_data_selection()[,c("SurveyName",
+                                          "Surveyyear",
+                                          "Total.Est",
+                                          "High.Est",
+                                          "Low.Est",
+                                          "Total.SE",
+                                          "High.SE",
+                                          "Low.SE",
+                                          "Tot.RP@90",
+                                          "High.RP@90",
+                                          "Low.RP@90"),] ,
+                extensions = 'Buttons',
+                selection = 'single',
+                options = list(dom = "Blfrtip",
+                               iDisplayLength = 10,
+                               buttons = list("copy",
+                                              list(
+                                                extend = "collection" ,
+                                                buttons = c("csv", "excel", "pdf"),
+                                                text = "Download",
+                                                exportOptions = list(modifier = list(page = "all"))
+                                                )
+                                              )
+                               ),
+                rownames = FALSE)
+      })
+
+    output$remove_from_trend<-renderUI({
+      req(input$trend_data_selection_table_rows_selected)
+      actionBttn("remove_from_trend", "Do not include in trend analysis")
+      })
+
+
+    observeEvent(c(input$remove_from_trend), {
+      trend_data_selection()<-trend_data_selection()[- as.numeric(trend_data_selection_table_rows_selected),]
+    }, priority = 11)
+
+    output$matching_abundance_plot<- renderPlot({
+    req(input$tbl_rows_selected)
+    req(input$Trend)
+    labels<-as.character(seq(min(trend_data_selection()$Surveyyear), max(trend_data_selection()$Surveyyear), by = 1))
+
+    labels[(seq(min(trend_data_selection()$Surveyyear), max(trend_data_selection()$Surveyyear), by = 1)%%2 == 1)]<-''
+
+
+    myColors <- c("black", brewer.pal(length(unique(trend_data_selection()$redundant_name)[-1]),"Set1"))
+    names(myColors) <- c("", (unique(trend_data_selection()$redundant_name)[which(unique(trend_data_selection()$redundant_name) != "")]))
+    colScale <- scale_colour_manual(name = names(myColors),values = myColors, breaks = )
+
+    ggplot(trend_data_selection(), aes(x = Surveyyear,
+                           color = redundant_name))+
+      geom_point(aes( y = Total.Est),
+                 position = position_dodge(width = .5))+
+      geom_errorbar(aes(ymin = Total.Est - Total.SE, ymax = Total.Est + Total.SE),
+                    position = position_dodge(width = .5))+
+      scale_y_continuous(limits = c(0,max(trend_data_selection()$Total.Est) + max(trend_data_selection()$Total.SE)),
+                         breaks = seq(0, max(trend_data_selection()$Total.Est) + max(trend_data_selection()$Total.SE), by = 1000))+
+      scale_x_continuous(limits=c(min(trend_data_selection()$Surveyyear)-1,max(trend_data_selection()$Surveyyear)+1),
+                         breaks=seq(min(trend_data_selection()$Surveyyear), max(trend_data_selection()$Surveyyear), by = 1),
+                         labels = labels)+
+      colScale+
+      labs(y = "Moose", x = "", color  = "")+
+      ggtitle(paste("All matches for" ,moose.dat()$SurveyName[1], moose.dat()$Surveyyear[1], "survey area"))+
+      theme(plot.title = element_text(family = "Trebuchet MS", color="#666666", face="bold", size=22, hjust=0),
+            plot.subtitle  = element_text(family = "Trebuchet MS", color="#666666", face="bold", size=18, hjust=0),
+            legend.text = element_text(family = "Trebuchet MS", color="#666666", face="bold", size=15),
+            axis.title = element_text(family = "Trebuchet MS", color="#666666", face="bold", size=12),
+            legend.title = element_text(family = "Trebuchet MS", color="#666666", face="bold", size=15),
+            axis.text = element_text(family = "Trebuchet MS", color="#666666", face="bold", size=12),
+            axis.text.x = element_text(angle = 45, hjust = 1),
+            legend.position = "right",
+            panel.background = element_rect(fill = "white", colour = "#666666"),
+            panel.grid.major = element_line(size = 0.0005, linetype = 'solid', colour = "grey"),
+            legend.key.size = unit(2.5, "cm"))
+    })
 
 })
 

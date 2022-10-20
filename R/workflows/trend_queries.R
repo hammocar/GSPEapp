@@ -1,5 +1,21 @@
+library(plyr)
+library(ggplot2)
+library(ggmap)
+library(purrr)
+library(tidyr)
+library(kableExtra)
+library(sp)
+library(readr)
+library(DT)
+library(tools)
+library(DBI)
+library(odbc)
+library(lubridate)
 library(dplyr)
+library(dbplyr)
+library(RColorBrewer)
 
+source("inst/app/moosepop.R")
 
 moose <- DBI::dbConnect(
   odbc::odbc(),
@@ -29,9 +45,9 @@ query<-paste("SELECT DISTINCT surveyid, surveyname, surveyyear
 all.id.list <- dbGetQuery(moose,query)
 all.id.list
 
-# Query to select indivival survey using unique survey ID
+# Query to select individual survey using unique survey ID
 
-survey_id<- 211
+survey_id<- 361
 
 moose.dat <- dbGetQuery(moose,
                         paste("exec spr_wc_moosepop_reprospreadsheet @surveyIDlist = '",
@@ -44,55 +60,103 @@ moose.dat <- dbGetQuery(moose,
 unit_IDs<-moose.dat$UnitID
 l<-length(unit_IDs)
 
-# Query to find surveys with common area
-query<-paste("SELECT DISTINCT surveyid, surveyname, surveyyear
-    FROM v_wc_moosepop_reprospreadsheet
-    WHERE UnitID IN (",paste(shQuote(unit_IDs, type="sh"), collapse=", "), ")",sep="")
 
-try <- tbl(moose, "v_wc_moosepop_reprospreadsheet")
-try<-
-try %>%
-  group_by(SurveyID, SurveyName, SurveyYear, UnitID) %>%
-  summarise(unit.in.searched.survey = ifelse(UnitID %in% unit_IDs, "yes", "no")) %>%
-  ungroup() %>%
-  group_by(SurveyID, SurveyName, SurveyYear, unit.in.searched.survey) %>%
-  summarise(n = n()) %>%
-  filter(unit.in.searched.survey == "yes") %>%
-  filter(n == l) %>%
-  select(SurveyID) %>% collect()
+# Find surveys that at least PARTIALLY include area of interest
+partial <-
+  tbl(moose, "v_wc_moosepop_reprospreadsheet") %>%
+  try %>%
+  filter(UnitID %in% unit_IDs) %>%
+  collect() %>%
+  dplyr::select(SurveyID)
 
 
-# Query to get the surveys with common areas
-S <- dbGetQuery(moose,
+
+survey_IDs_partial<- unique(partial$SurveyID)
+
+
+  # Get all survey data from the partial matches
+partial_match_data <- dbGetQuery(moose,
               paste("exec spr_wc_moosepop_reprospreadsheet @SurveyIDList = '",
-                    paste(as.character(try$SurveyID), sep="' '", collapse=", "),
+                    paste(as.character(survey_IDs_partial), sep="' '", collapse=", "),
                     "'", sep = ""))
 
-S$AA<-0
-S[is.element(S$UnitID, unit_IDs),"AA"]<-1
+# Identify only the surveys that include the entire AA
+partial_match_data<-
+  partial_match_data %>%
+  filter(UnitID %in% unit_IDs) %>%
+  group_by(SurveyID, SurveyName, Surveyyear) %>%
+  dplyr::summarise(n = n()) %>%
+  ungroup() %>%
+  dplyr::filter(n == l)
 
+# Get the survey data for the surveys that include the entire AA
+exact_match_data <- dbGetQuery(moose,
+                paste("exec spr_wc_moosepop_reprospreadsheet @SurveyIDList = '",
+                      paste(as.character(partial_match_data$SurveyID), sep="' '", collapse=", "),
+                      "'", sep = ""))
+
+
+exact_match_data$AA<-0
+exact_match_data[is.element(exact_match_data$UnitID, unit_IDs),"AA"]<-1
+
+results(moose.dat)
+# Create a function that will run and can be mapped even if there's an error in a survey
 flexible_AA_tables<-possibly(AA_tables, otherwise = NULL)
 
-out.all <- dlply(S, .(SurveyID),.fun=function(x)flexible_AA_tables(x, column_names = "AA"))
+# Run all of the estimates
+out.all <- dlply(exact_match_data, .(SurveyID),.fun=function(x)flexible_AA_tables(x, column_names = "AA"))
 
+# Extract just the total abundance estimate
 trend_data<-map_df(out.all,  1)
 
-trend_data$SurveyID<-rep(as.integer(names(out.all[!sapply( out.all, function(x) length(x) == 0 )])), each = 2)
-trend_data<-left_join(trend_data, try)
 
-ggplot(trend_data %>% filter(Area == "AA"), aes(x = SurveyYear))+
-  geom_point(aes( y = Total.Est))+
-  geom_errorbar(aes(ymin = Total.Est - Total.SE, ymax = Total.Est + Total.SE))+
+trend_data$SurveyID<-rep(as.integer(names(out.all[!sapply( out.all, function(x) length(x) == 0 )])), each = 2)
+trend_data<-left_join(trend_data, partial_match_data) %>% filter(Area == "AA")
+
+# Deal with multiple surveys in the same year
+trend_data<-
+trend_data %>%
+  group_by(Surveyyear) %>%
+  dplyr::mutate(redundant_name = SurveyName,
+                redundant = length(Surveyyear),
+                equal_estimates =length(unique(Total.Est)) == 1 & length(unique(Total.SE)) == 1)
+
+trend_data[trend_data$redundant == 1 |trend_data$equal_estimates == TRUE , "redundant_name"]<-""
+
+
+labels<-as.character(seq(min(trend_data$Surveyyear), max(trend_data$Surveyyear), by = 1))
+
+labels[(seq(min(trend_data$Surveyyear), max(trend_data$Surveyyear), by = 1)%%2 == 1)]<-''
+
+
+myColors <- c("black", brewer.pal(length(unique(trend_data$redundant_name)[-1]),"Set1"))
+names(myColors) <- c("", (unique(trend_data$redundant_name)[which(unique(trend_data$redundant_name) != "")]))
+colScale <- scale_colour_manual(name = names(myColors),values = myColors, breaks = )
+
+ggplot(trend_data, aes(x = Surveyyear,
+                       color = redundant_name))+
+  geom_point(aes( y = Total.Est),
+             position = position_dodge(width = .5))+
+  geom_errorbar(aes(ymin = Total.Est - Total.SE, ymax = Total.Est + Total.SE),
+                position = position_dodge(width = .5))+
+  scale_y_continuous(limits = c(0,max(trend_data$Total.Est) + max(trend_data$Total.SE)),
+                     breaks = seq(0, max(trend_data$Total.Est) + max(trend_data$Total.SE), by = 1000))+
+  scale_x_continuous(limits=c(min(trend_data$Surveyyear)-1,max(trend_data$Surveyyear)+1),
+                     breaks=seq(min(trend_data$Surveyyear), max(trend_data$Surveyyear), by = 1),
+                     labels = labels)+
+  colScale+
+  labs(y = "Moose", x = "", color  = "")+
+  ggtitle(paste("All matches for" ,moose.dat$SurveyName[1], moose.dat$Surveyyear[1], "survey area"))+
   theme(plot.title = element_text(family = "Trebuchet MS", color="#666666", face="bold", size=22, hjust=0),
         plot.subtitle  = element_text(family = "Trebuchet MS", color="#666666", face="bold", size=18, hjust=0),
         legend.text = element_text(family = "Trebuchet MS", color="#666666", face="bold", size=15),
         axis.title = element_text(family = "Trebuchet MS", color="#666666", face="bold", size=12),
         legend.title = element_text(family = "Trebuchet MS", color="#666666", face="bold", size=15),
         axis.text = element_text(family = "Trebuchet MS", color="#666666", face="bold", size=12),
+        axis.text.x = element_text(angle = 45, hjust = 1),
         legend.position = "right",
         panel.background = element_rect(fill = "white", colour = "#666666"),
-        panel.grid.major = element_line(size = 0.0005, linetype = 'solid',
-                                        colour = "grey"),
+        panel.grid.major = element_line(size = 0.0005, linetype = 'solid', colour = "grey"),
         legend.key.size = unit(2.5, "cm"))
 
 
