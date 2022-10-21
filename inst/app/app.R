@@ -57,8 +57,8 @@ exitFS.call(document);
 
 
 header <- dashboardHeader(title = "Moose Manager")
-sidebar <- dashboardSidebar(uiOutput("sidebarpanel"), collapsed = F)
-body <- dashboardBody(uiOutput("body"))
+sidebar <- uiOutput("sidebarpanel")
+body <- uiOutput("body")
 ui <- dashboardPage(header, sidebar, body)
 
 
@@ -82,13 +82,6 @@ textStyle <- element_text(face = "bold.italic", color = "black", size = 20)
 
 
 ##################################################################
-
-login <- box(
-    textInput("userName", "Username"),
-    passwordInput("passwd", "Password"),
-    br(),
-    actionButton("Login", "Log in")
-)
 
 
 server<-shinyServer(function(input, output, session) {
@@ -128,7 +121,6 @@ server<-shinyServer(function(input, output, session) {
     })
 
     output$sidebarpanel <- renderUI({
-        if (USER$Logged == TRUE) {
             div(
                 shinydashboard::dashboardSidebar(collapsed = TRUE,
                         sidebarMenu(
@@ -141,7 +133,6 @@ server<-shinyServer(function(input, output, session) {
 
                 )
             )
-        }
     })
 
     output$body <- renderUI({
@@ -150,13 +141,15 @@ server<-shinyServer(function(input, output, session) {
                   tags$head(
                     tags$style(HTML(".main-sidebar { font-size: 20px; }")) #change the font size to 20
                   ),
+                  fluidRow(
+                    mainPanel(
             tabsetPanel(
                 id = "tabs",
                 tabPanel(
                     value = "Survey Search",
                     title = "Survey Search",
 
-                    box(    width = 12,
+                    box(    width = 18,
                             title = "Browse for Surveys",
                             status = "primary",
                             solidHeader = TRUE,
@@ -182,14 +175,34 @@ server<-shinyServer(function(input, output, session) {
                                                                   dateFormat = "yyyy"))),
                     DT::dataTableOutput("tbl"),
                     uiOutput("columns"),
-                    uiOutput("survey_action")%>% withSpinner(color="#0dc5c1")))
+                    uiOutput("survey_action")%>% withSpinner(color="#0dc5c1")),
+                    br(),br(),br(),br(),br(),br(),br(),br(),br(),br(),br(),br(),br(),br(),br(),br(),br(),br(),br(),br(),br(),br(),br(),br(),
+                    br(),br(),br(),br(),br(),br(),br(),br(),br(),br(),br(),br(),br(),br(),br(),br(),br(),br(),br(),br(),br(),br(),br(),br(),
+                    br(),br(),br(),br(),br(),br(),br(),br(),br(),br(),br(),br(),br(),br(),br(),br(),br(),br(),br(),br(),br(),br(),br(),br()
+
                 )
-                )
+                )                )))
 
 
 
         } else {
-            login
+          dashboardBody(
+            tags$head(
+              tags$style(HTML(".main-sidebar { font-size: 20px; }")) #change the font size to 20
+            ),
+            fluidRow(
+              mainPanel(
+                box(    width = 6,
+                        textInput("userName", "Username"),
+                        passwordInput("passwd", "Password"),
+                        br(),
+                        actionButton("Login", "Log in")),
+                br(),br(),br(),br(),br(),br(),br(),br(),br(),br(),br(),br(),br(),br(),br(),br(),br(),br(),br(),br(),br(),br(),br(),br(),
+                br(),br(),br(),br(),br(),br(),br(),br(),br(),br(),br(),br(),br(),br(),br(),br(),br(),br(),br(),br(),br(),br(),br(),br(),
+                br(),br(),br(),br(),br(),br(),br(),br(),br(),br(),br(),br(),br(),br(),br(),br(),br(),br(),br(),br(),br(),br(),br(),br()
+                )
+
+          ))
         }
     })
 
@@ -246,7 +259,7 @@ server<-shinyServer(function(input, output, session) {
       req(input$tbl_rows_selected)
       actionGroupButtons(
         inputIds = c("survey_data", "GSPE", "Trend", "Plan"),
-        labels = c("View/download survey data", "Single survey GSPE details", "Trend analysis", "Plan a survey like this one"),
+        labels = c("View/download survey data", "Single survey GSPE details", "Trend analysis", "Plan a new survey for this area"),
         status = "primary"
       )})
 
@@ -306,17 +319,19 @@ server<-shinyServer(function(input, output, session) {
 
 
     observeEvent(input$Trend , {
+      freezeReactiveValue(input, "remove_from_trend")
     appendTab("tabs",
     tabPanel(
-      value = "Trend analysis",
-      title = "Trend analysis",
+      value = paste(moose.dat()$SurveyName[1], moose.dat()$Surveyyear[1], "Trend analysis"),
+      title = paste(moose.dat()$SurveyName[1], moose.dat()$Surveyyear[1], "Trend analysis"),
       box(width = 12,
           title = "",
           status = "primary",
           solidHeader = TRUE,
-          DT::dataTableOutput("trend_data_selection")%>% withSpinner(color="#0dc5c1"),
-          uiOutput("remove_from_trend"),
-          plotOutput("matching_abundance_plot"))), select=TRUE)})
+          DT::dataTableOutput("trend_data_selection_table")%>% withSpinner(color="#0dc5c1"),
+          actionButton("remove_from_trend", "Remove from trend "),
+          plotOutput("matching_abundance_plot"))), select=TRUE)}, priority = 99)
+
 
     observeEvent(input$Plan , {
       appendTab("tabs",
@@ -504,8 +519,9 @@ server<-shinyServer(function(input, output, session) {
         table_data$calfcow}, options = list(dom = 't'),rownames = FALSE)
 
 
-    trend_data_selection<-eventReactive(c(input$tbl_rows_selected,input$Trend),{
-
+    trend_data_selection<-reactive({
+      req(input$tbl_rows_selected)
+      req(input$Trend)
 
       # Extract Unit IDs to search
       unit_IDs<-moose.dat()$UnitID
@@ -575,8 +591,21 @@ server<-shinyServer(function(input, output, session) {
       trend_data
     })
 
+    values <- reactiveValues()
+
+    observeEvent(trend_data_selection(), {
+      if(!is.null(trend_data_selection())){
+        values$testdf <- trend_data_selection()
+      }
+    })
+
+    observeEvent(input$remove_from_trend,{
+      if (!is.null(input$trend_data_selection_table_rows_selected)) {
+        values$testdf <- values$testdf[-input$trend_data_selection_table_rows_selected,]
+      }
+    })
     output$trend_data_selection_table<-DT::renderDataTable({
-      datatable(trend_data_selection()[,c("SurveyName",
+      datatable(values$testdf[,c("SurveyName",
                                           "Surveyyear",
                                           "Total.Est",
                                           "High.Est",
@@ -586,55 +615,48 @@ server<-shinyServer(function(input, output, session) {
                                           "Low.SE",
                                           "Tot.RP@90",
                                           "High.RP@90",
-                                          "Low.RP@90"),] ,
+                                          "Low.RP@90")] ,
                 extensions = 'Buttons',
-                selection = 'single',
-                options = list(dom = "Blfrtip",
-                               iDisplayLength = 10,
-                               buttons = list("copy",
-                                              list(
-                                                extend = "collection" ,
-                                                buttons = c("csv", "excel", "pdf"),
-                                                text = "Download",
-                                                exportOptions = list(modifier = list(page = "all"))
-                                                )
-                                              )
-                               ),
-                rownames = FALSE)
-      })
-
-    output$remove_from_trend<-renderUI({
-      req(input$trend_data_selection_table_rows_selected)
-      actionBttn("remove_from_trend", "Do not include in trend analysis")
+                selection = 'single'
+                , options = list(
+                  dom = "Blfrtip"
+                  , iDisplayLength = 10,
+                  buttons =
+                    list("copy", list(
+                      extend = "collection" ,
+                      buttons = c("csv", "excel", "pdf"),
+                      text = "Download",
+                      exportOptions = list(
+                        modifier = list(page = "all")
+                      )))), rownames = FALSE)
       })
 
 
-    observeEvent(c(input$remove_from_trend), {
-      trend_data_selection()<-trend_data_selection()[- as.numeric(trend_data_selection_table_rows_selected),]
-    }, priority = 11)
+
 
     output$matching_abundance_plot<- renderPlot({
+      data<-values$testdf
     req(input$tbl_rows_selected)
     req(input$Trend)
-    labels<-as.character(seq(min(trend_data_selection()$Surveyyear), max(trend_data_selection()$Surveyyear), by = 1))
+    labels<-as.character(seq(min(data$Surveyyear), max(data$Surveyyear), by = 1))
 
-    labels[(seq(min(trend_data_selection()$Surveyyear), max(trend_data_selection()$Surveyyear), by = 1)%%2 == 1)]<-''
+    labels[(seq(min(data$Surveyyear), max(data$Surveyyear), by = 1)%%2 == 1)]<-''
 
 
-    myColors <- c("black", brewer.pal(length(unique(trend_data_selection()$redundant_name)[-1]),"Set1"))
-    names(myColors) <- c("", (unique(trend_data_selection()$redundant_name)[which(unique(trend_data_selection()$redundant_name) != "")]))
+    myColors <- c("black", brewer.pal(length(unique(data$redundant_name)[-1]),"Set1"))
+    names(myColors) <- c("", (unique(data$redundant_name)[which(unique(data$redundant_name) != "")]))
     colScale <- scale_colour_manual(name = names(myColors),values = myColors, breaks = )
 
-    ggplot(trend_data_selection(), aes(x = Surveyyear,
+    ggplot(data, aes(x = Surveyyear,
                            color = redundant_name))+
       geom_point(aes( y = Total.Est),
                  position = position_dodge(width = .5))+
       geom_errorbar(aes(ymin = Total.Est - Total.SE, ymax = Total.Est + Total.SE),
                     position = position_dodge(width = .5))+
-      scale_y_continuous(limits = c(0,max(trend_data_selection()$Total.Est) + max(trend_data_selection()$Total.SE)),
-                         breaks = seq(0, max(trend_data_selection()$Total.Est) + max(trend_data_selection()$Total.SE), by = 1000))+
-      scale_x_continuous(limits=c(min(trend_data_selection()$Surveyyear)-1,max(trend_data_selection()$Surveyyear)+1),
-                         breaks=seq(min(trend_data_selection()$Surveyyear), max(trend_data_selection()$Surveyyear), by = 1),
+      scale_y_continuous(limits = c(0,max(data$Total.Est) + max(data$Total.SE)),
+                         breaks = seq(0, max(data$Total.Est) + max(data$Total.SE), by = 1000))+
+      scale_x_continuous(limits=c(min(data$Surveyyear)-1,max(data$Surveyyear)+1),
+                         breaks=seq(min(data$Surveyyear), max(data$Surveyyear), by = 1),
                          labels = labels)+
       colScale+
       labs(y = "Moose", x = "", color  = "")+
