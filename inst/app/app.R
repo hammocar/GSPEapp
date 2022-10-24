@@ -319,18 +319,18 @@ server<-shinyServer(function(input, output, session) {
 
 
     observeEvent(input$Trend , {
-      freezeReactiveValue(input, "remove_from_trend")
     appendTab("tabs",
     tabPanel(
       value = paste(moose.dat()$SurveyName[1], moose.dat()$Surveyyear[1], "Trend analysis"),
       title = paste(moose.dat()$SurveyName[1], moose.dat()$Surveyyear[1], "Trend analysis"),
       box(width = 12,
-          title = "",
+          title = "Trend Analysis",
           status = "primary",
           solidHeader = TRUE,
           DT::dataTableOutput("trend_data_selection_table")%>% withSpinner(color="#0dc5c1"),
-          actionButton("remove_from_trend", "Remove from trend "),
-          plotOutput("matching_abundance_plot"))), select=TRUE)}, priority = 99)
+          actionButton("remove_from_trend", "Remove from trend ") ,
+          plotOutput("matching_abundance_plot")
+          )), select=TRUE)}, priority = 99)
 
 
     observeEvent(input$Plan , {
@@ -518,8 +518,11 @@ server<-shinyServer(function(input, output, session) {
 
         table_data$calfcow}, options = list(dom = 't'),rownames = FALSE)
 
+    values <- reactiveValues(testdf = NULL)
 
-    trend_data_selection<-reactive({
+
+observeEvent(input$tabs == paste(moose.dat()$SurveyName[1], moose.dat()$Surveyyear[1], "Trend analysis"), {
+
       req(input$tbl_rows_selected)
       req(input$Trend)
 
@@ -588,23 +591,21 @@ server<-shinyServer(function(input, output, session) {
                       equal_estimates =length(unique(Total.Est)) == 1 & length(unique(Total.SE)) == 1)
 
       trend_data[trend_data$redundant == 1 |trend_data$equal_estimates == TRUE , "redundant_name"]<-""
-      trend_data
-    })
+      values$testdf<-trend_data
+      })
 
-    values <- reactiveValues()
 
-    observeEvent(trend_data_selection(), {
-      if(!is.null(trend_data_selection())){
-        values$testdf <- trend_data_selection()
-      }
-    })
 
     observeEvent(input$remove_from_trend,{
+
       if (!is.null(input$trend_data_selection_table_rows_selected)) {
-        values$testdf <- values$testdf[-input$trend_data_selection_table_rows_selected,]
+
+        values$testdf <- values$testdf[-as.numeric(input$trend_data_selection_table_rows_selected),]
       }
     })
-    output$trend_data_selection_table<-DT::renderDataTable({
+
+
+    output$trend_data_selection_table<-DT::renderDataTable(server = FALSE,{
       datatable(values$testdf[,c("SurveyName",
                                           "Surveyyear",
                                           "Total.Est",
@@ -619,8 +620,9 @@ server<-shinyServer(function(input, output, session) {
                 extensions = 'Buttons',
                 selection = 'single'
                 , options = list(
-                  dom = "Blfrtip"
-                  , iDisplayLength = 10,
+                  dom = "Blfrtip",
+                  iDisplayLength = 10,
+                  scrollX = TRUE,
                   buttons =
                     list("copy", list(
                       extend = "collection" ,
@@ -635,9 +637,11 @@ server<-shinyServer(function(input, output, session) {
 
 
     output$matching_abundance_plot<- renderPlot({
-      data<-values$testdf
     req(input$tbl_rows_selected)
     req(input$Trend)
+    req(!is.null(values$testdf))
+    data<-values$testdf
+
     labels<-as.character(seq(min(data$Surveyyear), max(data$Surveyyear), by = 1))
 
     labels[(seq(min(data$Surveyyear), max(data$Surveyyear), by = 1)%%2 == 1)]<-''
