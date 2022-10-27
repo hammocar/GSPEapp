@@ -145,8 +145,8 @@ server<-shinyServer(function(input, output, session) {
                                       h4("Select a survey in the table"),
                                       column(width = 6,
                                       DT::dataTableOutput("tbl"),
-                                      uiOutput("columns"),
-                                      uiOutput("survey_action")%>% withSpinner(color="#0dc5c1"))
+                                      uiOutput("columns")),
+                                      uiOutput("survey_action")%>% withSpinner(color="#0dc5c1")
                                       )))),
                              tabPanel("Survival"),
                              tabPanel("Twinning"),
@@ -168,9 +168,11 @@ server<-shinyServer(function(input, output, session) {
     values<-reactiveValues(Logged = F, # T/F logged in variable
                            moose = NULL, # database connection
                            authorized_surveys = NULL, # List of all surveys the biologist has access to
+                           survey_ids = NULL, # ID from selected survey
                            moose.dat = NULL, # Data from the selected survey
                            trend_data = NULL,
-                           GSPE_table_data = NULL) # Data from all surveys with area matches to the selected survey
+                           tab_change = 0) # Data from all surveys with area matches to the selected survey
+
 
 # On login, establish data connection and get available surveys
     observeEvent(input$Login > 0, {
@@ -193,91 +195,93 @@ server<-shinyServer(function(input, output, session) {
       values$authorized_surveys<-dbGetQuery(moose,query)
       values$moose<-moose
       })
-# When user selects any action to perform on the survey, get the survey data
-# The event is the TAB SWITCH, otherwise nothing happens until everything has loaded
-    observeEvent(input$abundance_tabs == paste("View data", values$authorized_surveys[input$tbl_rows_selected,"surveyname"], " ", values$authorized_surveys[input$tbl_rows_selected,"surveyyear"]) |
-                   input$abundance_tabs == paste("GSPE details:",values$authorized_surveys[input$tbl_rows_selected,"surveyname"], " ", values$authorized_surveys[input$tbl_rows_selected,"surveyyear"]) |
-                   input$abundance_tabs == paste(values$authorized_surveys[input$tbl_rows_selected,"surveyname"], " ", values$authorized_surveys[input$tbl_rows_selected,"surveyyear"], "Trend analysis") |
-                   input$abundance_tabs == paste("Plan a survey like", values$authorized_surveys[input$tbl_rows_selected,"surveyname"], " ", values$authorized_surveys[input$tbl_rows_selected,"surveyyear"]), {
-      survey_ids <- values$authorized_surveys[input$tbl_rows_selected,"surveyid"]
-      query<-paste("exec spr_wc_moosepop_reprospreadsheet @surveyIDlist = '", survey_ids,"'", sep = "")
 
-      values$moose.dat <- dbGetQuery(values$moose, query)
-  })
+observeEvent(input$tbl_rows_selected,{
+    # Look at the row of the table that was clicked, get the survey id
+    values$survey_ids <- values$authorized_surveys[input$tbl_rows_selected,"surveyid"]
+    values$moose.dat<- dbGetQuery(values$moose, paste("exec spr_wc_moosepop_reprospreadsheet @surveyIDlist = '", values$survey_ids,"'", sep = ""))
 
-# When tab switches to "Trend analysis", find matching surveys and gather all data
-    observeEvent(input$tabs == paste(values$moose.dat$SurveyName[1], values$moose.dat$Surveyyear[1], "Trend analysis"), {
-      req(input$tbl_rows_selected)
-      req(input$Trend)
-
-      # Extract Unit IDs to search
-      unit_IDs<-values$moose.dat$UnitID
-      l<-length(unit_IDs)
-
-
-      # Find surveys that at least PARTIALLY include area of interest
-      partial <-
-        tbl(values$moose, "v_wc_moosepop_reprospreadsheet") %>%
-        filter(UnitID %in% unit_IDs) %>%
-        collect() %>%
-        dplyr::select(SurveyID)
-
-      survey_IDs_partial<- unique(partial$SurveyID)
-
-      # Get all survey data from the partial matches
-      partial_match_data <- dbGetQuery(values$moose,
-                                       paste("exec spr_wc_moosepop_reprospreadsheet @SurveyIDList = '",
-                                             paste(as.character(survey_IDs_partial), sep="' '", collapse=", "),
-                                         "'", sep = ""))
-      # Identify only the surveys that include the entire AA
-      partial_match_data<-
-        partial_match_data %>%
-        filter(UnitID %in% unit_IDs) %>%
-        group_by(SurveyID, SurveyName, Surveyyear) %>%
-        dplyr::summarise(n = n()) %>%
-        ungroup() %>%
-        dplyr::filter(n == l)
-
-      # Get the survey data for the surveys that include the entire AA
-      exact_match_data <- dbGetQuery(values$moose,
-                                     paste("exec spr_wc_moosepop_reprospreadsheet @SurveyIDList = '",
-                                           paste(as.character(partial_match_data$SurveyID), sep="' '", collapse=", "),
-                                       "'", sep = ""))
-
-      exact_match_data$AA<-0
-      exact_match_data[is.element(exact_match_data$UnitID, unit_IDs),"AA"]<-1
-
-      # Create a function that will run and can be mapped even if there's an error in a survey
-      flexible_AA_tables<-possibly(AA_tables, otherwise = NULL)
-
-      # Run all of the estimates
-      out.all <- dlply(exact_match_data, .(SurveyID),.fun=function(x)flexible_AA_tables(x, column_names = "AA"))
-
-      # Extract just the total abundance estimate
-      trend_data<-map_df(out.all,  1)
-
-      trend_data$SurveyID<-rep(as.integer(names(out.all[!sapply( out.all, function(x) length(x) == 0 )])), each = 2)
-      trend_data<-left_join(trend_data, partial_match_data) %>% filter(Area == "AA")
-
-      # Deal with multiple surveys in the same year
-      trend_data<-
-        trend_data %>%
-        group_by(Surveyyear) %>%
-        dplyr::mutate(redundant_name = SurveyName,
-                      redundant = length(Surveyyear),
-                      equal_estimates =length(unique(Total.Est)) == 1 & length(unique(Total.SE)) == 1)
-
-      trend_data[trend_data$redundant == 1 |trend_data$equal_estimates == TRUE , "redundant_name"]<-""
-
-      values$trend_data<-trend_data
 })
+# # When user selects any action to perform on the survey, get the survey data
+# # The event is the TAB SWITCH, otherwise nothing happens until everything has loaded
+#     observeEvent(input$abundance_tabs == paste("View data", values$authorized_surveys[input$tbl_rows_selected,"surveyname"], " ", values$authorized_surveys[input$tbl_rows_selected,"surveyyear"]) |
+#                  input$abundance_tabs == paste("GSPE details:",values$authorized_surveys[input$tbl_rows_selected,"surveyname"], " ", values$authorized_surveys[input$tbl_rows_selected,"surveyyear"]) |
+#                  input$abundance_tabs == paste(values$authorized_surveys[input$tbl_rows_selected,"surveyname"], " ", values$authorized_surveys[input$tbl_rows_selected,"surveyyear"], "Trend analysis") |
+#                  input$abundance_tabs == paste("Plan a survey like", values$authorized_surveys[input$tbl_rows_selected,"surveyname"], " ", values$authorized_surveys[input$tbl_rows_selected,"surveyyear"]), {
+#       survey_ids <- values$authorized_surveys[input$tbl_rows_selected,"surveyid"]
+#       query<-paste("exec spr_wc_moosepop_reprospreadsheet @surveyIDlist = '", survey_ids,"'", sep = "")
+#
+#       values$moose.dat <- dbGetQuery(values$moose, query)
+#   })
 
-# When tab switches to "Single GSPE", run the moosepop AA tables code that generates estimates
-    observeEvent(input$tabs == paste("GSPE details:", values$moose.dat$SurveyName[1], " ", values$moose.dat$Surveyyear[1]), {
-      req(input$tbl_rows_selected)
+# # When tab switches to "Trend analysis", find matching surveys and gather all data
+#     observeEvent(input$tabs == paste(values$moose.dat$SurveyName[1], values$moose.dat$Surveyyear[1], "Trend analysis"), {
+#       req(input$tbl_rows_selected)
+#       req(input$Trend)
+#
+#       # Extract Unit IDs to search
+#       unit_IDs<-values$moose.dat$UnitID
+#       l<-length(unit_IDs)
+#
+#
+#       # Find surveys that at least PARTIALLY include area of interest
+#       partial <-
+#         tbl(values$moose, "v_wc_moosepop_reprospreadsheet") %>%
+#         filter(UnitID %in% unit_IDs) %>%
+#         collect() %>%
+#         dplyr::select(SurveyID)
+#
+#       survey_IDs_partial<- unique(partial$SurveyID)
+#
+#       # Get all survey data from the partial matches
+#       partial_match_data <- dbGetQuery(values$moose,
+#                                        paste("exec spr_wc_moosepop_reprospreadsheet @SurveyIDList = '",
+#                                              paste(as.character(survey_IDs_partial), sep="' '", collapse=", "),
+#                                          "'", sep = ""))
+#       # Identify only the surveys that include the entire AA
+#       partial_match_data<-
+#         partial_match_data %>%
+#         filter(UnitID %in% unit_IDs) %>%
+#         group_by(SurveyID, SurveyName, Surveyyear) %>%
+#         dplyr::summarise(n = n()) %>%
+#         ungroup() %>%
+#         dplyr::filter(n == l)
+#
+#       # Get the survey data for the surveys that include the entire AA
+#       exact_match_data <- dbGetQuery(values$moose,
+#                                      paste("exec spr_wc_moosepop_reprospreadsheet @SurveyIDList = '",
+#                                            paste(as.character(partial_match_data$SurveyID), sep="' '", collapse=", "),
+#                                        "'", sep = ""))
+#
+#       exact_match_data$AA<-0
+#       exact_match_data[is.element(exact_match_data$UnitID, unit_IDs),"AA"]<-1
+#
+#       # Create a function that will run and can be mapped even if there's an error in a survey
+#       flexible_AA_tables<-possibly(AA_tables, otherwise = NULL)
+#
+#       # Run all of the estimates
+#       out.all <- dlply(exact_match_data, .(SurveyID),.fun=function(x)flexible_AA_tables(x, column_names = "AA"))
+#
+#       # Extract just the total abundance estimate
+#       trend_data<-map_df(out.all,  1)
+#
+#       trend_data$SurveyID<-rep(as.integer(names(out.all[!sapply( out.all, function(x) length(x) == 0 )])), each = 2)
+#       trend_data<-left_join(trend_data, partial_match_data) %>% filter(Area == "AA")
+#
+#       # Deal with multiple surveys in the same year
+#       trend_data<-
+#         trend_data %>%
+#         group_by(Surveyyear) %>%
+#         dplyr::mutate(redundant_name = SurveyName,
+#                       redundant = length(Surveyyear),
+#                       equal_estimates =length(unique(Total.Est)) == 1 & length(unique(Total.SE)) == 1)
+#
+#       trend_data[trend_data$redundant == 1 |trend_data$equal_estimates == TRUE , "redundant_name"]<-""
+#
+#       values$trend_data<-trend_data
+# })
+#
 
-      values$GSPE_table_data<-AA_tables(values$moose.dat, input$columns)
-      })
 
 
 ########################################################################
@@ -309,7 +313,7 @@ server<-shinyServer(function(input, output, session) {
         inputIds = c("survey_data", "GSPE", "Trend", "Plan"),
         labels = c("View/download survey data", "Single survey GSPE details", "Trend analysis", "Plan a new survey for this area"),
         status = "primary"
-      )})
+        )})
 
     output$columns<-renderUI({
       req(input$tbl_rows_selected)
@@ -322,7 +326,10 @@ server<-shinyServer(function(input, output, session) {
     ############################
     # View/download survey data
     ############################
+    # When the button is clicked
     observeEvent(input$survey_data , {
+
+      # Add the view survey tab
       appendTab("abundance_tabs",
                 tabPanel(
                   value = paste("View data", values$authorized_surveys[input$tbl_rows_selected,"surveyname"], " ", values$authorized_surveys[input$tbl_rows_selected,"surveyyear"]),
@@ -331,54 +338,36 @@ server<-shinyServer(function(input, output, session) {
                       title = "Survey Data",
                       status = "primary",
                       solidHeader = TRUE,
-                      DT::dataTableOutput("survey_data"))), select=TRUE)
+                      DT::dataTableOutput(paste0(values$survey_ids))
+                      )), select=TRUE)
+
+
+      insertUI(selector = "#placeholder", where = "afterEnd",
+               ui = DT::dataTableOutput(paste0(values$survey_ids)))
+
+      output[[paste0(values$survey_ids)]]<- DT::renderDataTable(server = FALSE, {
+        values$moose.dat},
+        extensions = 'Buttons',
+        options = list(dom = "Blfrtip",
+                       scrollX = T,
+                       iDisplayLength = 10,
+                       buttons = list("copy",
+                                      list(extend = "collection" ,
+                                           buttons = c("csv", "excel", "pdf"),
+                                           text = "Download",
+                                           exportOptions = list(modifier = list(page = "all"))))),
+        rownames = FALSE)
     })
 
-    output$survey_data<- DT::renderDataTable(server = FALSE, {
-      values$moose.dat},
 
-      extensions = 'Buttons',
-      options = list(dom = "Blfrtip",
-                     scrollX = T,
-                     iDisplayLength = 10,
-                     buttons = list("copy",
-                                    list(extend = "collection" ,
-                                         buttons = c("csv", "excel", "pdf"),
-                                         text = "Download",
-                                         exportOptions = list(modifier = list(page = "all"))))),
-      rownames = FALSE)
 
     ############################
     # Single GSPE
     ############################
-    observeEvent(input$GSPE , {
-      appendTab("abundance_tabs",
-                tabPanel(
-                  value = paste("GSPE details:", values$authorized_surveys[input$tbl_rows_selected,"surveyname"], " ", values$authorized_surveys[input$tbl_rows_selected,"surveyyear"]),
-                  title = paste("GSPE details:", values$authorized_surveys[input$tbl_rows_selected,"surveyname"], " ", values$authorized_surveys[input$tbl_rows_selected,"surveyyear"]),
-                  box(width = 12,
-                      title = "GeoSpatial Population Estimate",
-                      status = "primary",
-                      solidHeader = TRUE,
-                      checkboxInput("sightability", "Use sightability correction factor", value = FALSE),
-                      uiOutput("sightability_inputs"),
-                      box(width = 12,
-                          h4(strong("Total Abundance")),
-                          DT::dataTableOutput("GSPE_table_abundance_SCF")%>% withSpinner(color="#0dc5c1") ,
-                          h4(strong("Bull:Cow Composition")),
-                          DT::dataTableOutput("GSPE_table_bullcow")%>% withSpinner(color="#0dc5c1"),
-                          h4(strong("Calf:Cow Composition")),
-                          DT::dataTableOutput("GSPE_table_calfcow")%>% withSpinner(color="#0dc5c1")),
-                      box(width = 12,
-                          h4(strong("Abundance Heatmap")),
-                          selectInput("metric", "Which demographic?", choices = c("totalmoose", "TotalBulls", "TotalCows", "TotalCalves"), selected = "totalmoose", multiple = FALSE),
-                          plotOutput("GSPE_plot", height = "1000px") %>% withSpinner(color="#0dc5c1"))
-                  )), select=TRUE)
-    })
 
     # Add option for sightability correction
-    output$sightability_inputs<-renderUI({
-      req(input$sightability)
+    output$sightability_trials<-renderUI({
+      req(input$sightability == TRUE)
       fluidRow(
         box(width = 12,
             numericInput("high_trials", "Number of High Stratum Sightability Trials", value = 0, min = 1, step = 1),
@@ -388,12 +377,38 @@ server<-shinyServer(function(input, output, session) {
         ))
     })
 
-    # Abundance table output
-    output$GSPE_table_abundance_SCF<-DT::renderDataTable({
-      validate(need(!is.null(input$tbl_rows_selected), "\nSelect a survey from the Survey Search tab."))
+    idcount <- reactiveVal(0)
+
+    observeEvent(eventExpr =input$GSPE ,priority = 99, {
+      thisid <- idcount() + 1
+      idcount(thisid)
+      thisid <- paste0("plot", thisid)
+
+      appendTab("abundance_tabs",
+                tabPanel(
+                  value = paste("GSPE details:", values$authorized_surveys[input$tbl_rows_selected,"surveyname"], " ", values$authorized_surveys[input$tbl_rows_selected,"surveyyear"]),
+                  title = paste("GSPE details:", values$authorized_surveys[input$tbl_rows_selected,"surveyname"], " ", values$authorized_surveys[input$tbl_rows_selected,"surveyyear"]),
+                  h1(strong( "GeoSpatial Population Estimate")),
+                  checkboxInput("sightability", "Use sightability correction factor", value = FALSE),
+                  uiOutput("sightability_trials"),
+                  h4(strong("Total Abundance")),
+                  DT::dataTableOutput(paste(thisid, "GSPE_table_abundance_SCF", sep = ""))%>% withSpinner(color="#0dc5c1"),
+                  h4(strong("Bull:Cow Composition")),
+                  DT::dataTableOutput(paste(thisid, "GSPE_table_bullcow", sep = ""))%>% withSpinner(color="#0dc5c1"),
+                  h4(strong("Calf:Cow Composition")),
+                  DT::dataTableOutput(paste(thisid, "GSPE_table_calfcow", sep = ""))%>% withSpinner(color="#0dc5c1"),
+                  h4(strong("Abundance Heatmap")),
+                  plotOutput(paste(thisid, "GSPE_plot", sep = ""))%>% withSpinner(color="#0dc5c1"),
+                  selectInput("metric", "Which demographic?", choices = c("totalmoose", "TotalBulls", "TotalCows", "TotalCalves"), selected = "totalmoose", multiple = FALSE)
+                          ), select=TRUE)
 
 
-      table_data<-values$GSPE_table_data
+
+      # Run the GSPE code on the data
+      values[[paste(thisid, "table_data", sep = "")]]<-AA_tables(values$moose.dat, input$columns)
+
+      table_data<-values[[paste(thisid, "table_data", sep = "")]]
+
 
       abundance_data<-
         as.data.frame(rbind(table_data[["total_abundance"]],
@@ -404,55 +419,56 @@ server<-shinyServer(function(input, output, session) {
         relocate(Metric, .after = Area)
 
 
-      scf<-map(1:(length(input$columns)+1), ~
-                 scf.apply1(hi.est = as.numeric(as.data.frame(table_data[["total_abundance"]])$High.Est[.x]),
-                            lo.est = as.numeric(as.data.frame(table_data[["total_abundance"]])$Low.Est[.x]),
-                            hi.se = as.numeric(as.data.frame(table_data[["total_abundance"]])$High.SE[.x]),
-                            lo.se = as.numeric(as.data.frame(table_data[["total_abundance"]])$Low.SE[.x]),
-                            n.trials.hi = input$high_trials,
-                            n.trials.lo = input$low_trials,
-                            n.seen.hi = input$high_trials-input$high_missed,
-                            n.seen.lo = input$low_trials - input$low_missed))
 
-      scf <- ldply(scf, data.frame)
-      SCF<-as.data.frame(table_data[["total_abundance"]])
-      SCF$Area<-as.data.frame(table_data[["total_abundance"]])$Area
-      SCF$Total.Est<-scf$tot.moose
-      SCF$High.Est<-scf$tot.hi
-      SCF$Low.Est<-scf$tot.lo
-      SCF$Total.SE<-scf$tot.moose.se
-      SCF$High.SE<-scf$tot.hi.se
-      SCF$Low.SE<-scf$tot.lo.se
-      SCF$`Tot.RP@90`<-scf$rp.tot
-      SCF$`High.RP@90`<-scf$rp.90.hi
-      SCF$`Low.RP@90`<-scf$rp.90.lo
-      SCF[,2:7]<-round(SCF[,2:7])
-      SCF[,8:10]<-round(SCF[,8:10],2)
 
-      if(input$sightability == FALSE)
-        return(abundance_data)
+
+    # Abundance table output
+    output[[paste(thisid, "GSPE_table_abundance_SCF", sep = "")]]<-DT::renderDataTable({
+      if(input$sightability == FALSE | is.null(input$sightability)){
+        return(abundance)
+      }
+      else{
+        scf<-map(1:(length(input$columns)+1), ~
+                   scf.apply1(hi.est = as.numeric(as.data.frame(table_data[["total_abundance"]])$High.Est[.x]),
+                              lo.est = as.numeric(as.data.frame(table_data[["total_abundance"]])$Low.Est[.x]),
+                              hi.se = as.numeric(as.data.frame(table_data[["total_abundance"]])$High.SE[.x]),
+                              lo.se = as.numeric(as.data.frame(table_data[["total_abundance"]])$Low.SE[.x]),
+                              n.trials.hi = input$high_trials,
+                              n.trials.lo = input$low_trials,
+                              n.seen.hi = input$high_trials-input$high_missed,
+                              n.seen.lo = input$low_trials - input$low_missed))
+
+        scf <- ldply(scf, data.frame)
+        SCF<-as.data.frame(table_data[["total_abundance"]])
+        SCF$Area<-as.data.frame(table_data[["total_abundance"]])$Area
+        SCF$Total.Est<-scf$tot.moose
+        SCF$High.Est<-scf$tot.hi
+        SCF$Low.Est<-scf$tot.lo
+        SCF$Total.SE<-scf$tot.moose.se
+        SCF$High.SE<-scf$tot.hi.se
+        SCF$Low.SE<-scf$tot.lo.se
+        SCF$`Tot.RP@90`<-scf$rp.tot
+        SCF$`High.RP@90`<-scf$rp.90.hi
+        SCF$`Low.RP@90`<-scf$rp.90.lo
+        SCF[,2:7]<-round(SCF[,2:7])
+        SCF[,8:10]<-round(SCF[,8:10],2)
+
       SCF
+      }
     }, options = list(dom = 't'),rownames = FALSE)
 
+
     # Bull:Cow table output
-    output$GSPE_table_bullcow<-DT::renderDataTable({
-
-      table_data<-values$GSPE_table_data
-
+    output[[paste(thisid, "GSPE_table_bullcow", sep = "")]]<-DT::renderDataTable({
       table_data$bullcow}, options = list(dom = 't'),rownames = FALSE)
 
     # Calf:Cow table output
-    output$GSPE_table_calfcow<-DT::renderDataTable({
-      table_data<-values$GSPE_table_data
-
+    output[[paste(thisid, "GSPE_table_calfcow", sep = "")]]<-DT::renderDataTable({
       table_data$calfcow}, options = list(dom = 't'),rownames = FALSE)
 
     # Abundance heat map
-    output$GSPE_plot <- renderPlot({
-      validate(need(!is.null(input$tbl_rows_selected), "\nSelect a survey from the Survey Search tab."))
-
+    output[[paste(thisid, "GSPE_plot", sep = "")]] <- renderPlot({
       plot_data<-values$moose.dat
-      table_data<-values$GSPE_table_data
 
       prediction_data<-case_when(input$metric == "totalmoose" ~ "total_results",
                                  input$metric == "TotalBulls" ~ "bull_results",
@@ -480,7 +496,6 @@ server<-shinyServer(function(input, output, session) {
 
       plot_data<- cbind(plot_data, surv_results_predictions[,4:5])
 
-
       pred_plot<-ggmap(A)+geom_tile(data = plot_data, aes(x=centrlon,y=centrlat,fill= log(Est+1)),alpha= 1,colour="black")+
         geom_text(data=subset(plot_data, Counted== TRUE),aes_string(x="centrlon",y="centrlat",label= input$metric), color = "white", size = 5)+
         ggtitle(paste(plot_data$SurveyName),subtitle = paste(plot_data$Surveyyear, plot_data$Season, "Predicted", metric_label,"Moose Abundance"))+
@@ -500,6 +515,10 @@ server<-shinyServer(function(input, output, session) {
               legend.key.size = unit(2.5, "cm"))
       pred_plot
     }, height = 1000, units = "px")
+
+    })
+
+
 
     ############################
     # Trend Analysis
