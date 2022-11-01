@@ -62,8 +62,14 @@ exitFS.call(document);
 ui <- fluidPage(shinyjs::useShinyjs(),
                 tags$head(
                   tags$link(rel = "stylesheet", type = "text/css", href = "style.css"),
-                  tags$script(src = "script.js", type="text/javascript")
-                ),
+                  tags$script(src = "script.js", type="text/javascript"),
+                  tags$style(".shiny-notification {
+                  height: 100%;
+                  width: 100%;
+                  position:fixed;
+                  top: 50px;;
+                  left: 0;;}"))
+                ,
                 theme=bs_theme(version = 4,
                                bootswatch = "default"),
 
@@ -452,39 +458,43 @@ icon('times')
       # reactive sightability type choice UI
       output[[paste(thisid, "sightability_type", sep = "")]]<-renderUI({
         fluidRow(
-          box(width = 3,
-              radioButtons(paste(thisid, "sightability_type", sep = ""), "Type of sightability", choices = c("Trials", "Constant"), inline = T, selected = character(0))))
+          box(width = 4,
+              radioButtons(paste(thisid, "sightability_type", sep = ""), "Type of sightability", choices = c("Trials", "Constant"), inline = T, selected = "Trials")))
       })
 
       # Add the UI for constant SCF
       output[[paste(thisid, "sightability_constant", sep = "")]]<-renderUI({
-        hidden(
         fluidRow(
-          box(width = 3,
+          box(width = 4,
               numericInput(paste(thisid, "sightability_constant", sep = ""),
-                           "Enter a constant SCF (e.g. 1.2)",
+                           "Enter a constant SCF (e.g., 1.2)",
                            value = 1, min = 1, step = .05 )))
-        )
+
         })
 
       # Add the UI for trials
       output[[paste(thisid, "sightability_trials", sep = "")]]<-renderUI({
         fluidRow(
-          box(width = 10,
-              numericInput(paste(thisid, "high_trials", sep = ""), "Number of High Stratum Sightability Trials", value = 0, min = 1, step = 1),
-              numericInput(paste(thisid, "high_missed", sep = ""), "Number of High Stratum Moose Missed", value = 0, min = 1, step = 1),
-              numericInput(paste(thisid, "low_trials", sep = ""), "Number of Low Stratum Sightability Trials", value = 0, min = 1, step = 1),
-              numericInput(paste(thisid, "low_missed", sep = ""), "Number of Low Stratum Moose Missed", value = 0, min = 1, step = 1)))
+          column(width = 3,
+                 box(width = 10, title = "High Strat",
+                     numericInput(paste(thisid, "high_trials", sep = ""), "Trials", value = 0, min = 1, step = 1),
+                     numericInput(paste(thisid, "high_missed", sep = ""), "Moose Missed", value = 0, min = 1, step = 1))),
+          column(width = 3,
+                 box(width = 10, title = "Low Strat",
+                     numericInput(paste(thisid, "low_trials", sep = ""), "Trials", value = 0, min = 1, step = 1),
+                     numericInput(paste(thisid, "low_missed", sep = ""), "Moose Missed", value = 0, min = 1, step = 1))),
+          column(width = 6))
         })
 
       # If we want to use sightability, toggle on the sightability type choice UI
-      observeEvent(input[[paste(thisid, "sightability_type", sep = "")]],{
+      observeEvent(c(input[[paste(thisid, "sightability_type", sep = "")]]  , input[[paste(thisid, "sightability", sep = "")]] ),{
         toggle(
-          paste(thisid, "sightability_trials", sep = "")
+          paste(thisid, "sightability_trials", sep = ""), condition = input[[paste(thisid, "sightability_type", sep = "")]] == "Trials" & input[[paste(thisid, "sightability", sep = "")]]
         )
           toggle(
-            paste(thisid, "sightability_constant", sep = "")
+            paste(thisid, "sightability_constant", sep = ""), condition = input[[paste(thisid, "sightability_type", sep = "")]] == "Constant" & input[[paste(thisid, "sightability", sep = "")]]
           )
+
       })
 
 
@@ -502,22 +512,29 @@ icon('times')
                       uiOutput(paste(thisid, "sightability_constant", sep = ""))),
                   h4(strong("Total Abundance")),
                   div(id = paste(thisid, 1, sep = "")),
-                  #DT::dataTableOutput(paste(thisid, "GSPE_table_abundance_SCF", sep = ""))%>% withSpinner(color="#0dc5c1"),
                   h4(strong("Bull:Cow Composition")),
                   div(id = paste(thisid, 2, sep = "")),
-                  #DT::dataTableOutput(paste(thisid, "GSPE_table_bullcow", sep = ""))%>% withSpinner(color="#0dc5c1"),
                   h4(strong("Calf:Cow Composition")),
                   div(id = paste(thisid, 3, sep = "")),
-                  #DT::dataTableOutput(paste(thisid, "GSPE_table_calfcow", sep = ""))%>% withSpinner(color="#0dc5c1"),
                   h4(strong("Maps")),
-                  div(id = paste(thisid, 4, sep = "")),
-                  #plotOutput(paste(thisid, "GSPE_plot", sep = ""))%>% withSpinner(color="#0dc5c1"),
-                  selectInput("metric", "", choices = c("Predicted total moose" = "totalmoose",
-                                                        "Predicted bull moose" = "TotalBulls",
-                                                        "Predicted cow moose" = "TotalCows",
-                                                        "Predicted calf moose" = "TotalCalves",
-                                                        "Stratification map" = "strat_map",
-                                                        "Stratification + counts" = "strat_map_w_counts"),  selected = "totalmoose", multiple = FALSE)
+                  box(
+                  fluidRow(
+                    div(style="display: inline-block;vertical-align:top; width: 200px;",
+                  selectInput(paste(thisid, "metric", sep = ""), "",
+                              choices = c("Predicted total moose" = "totalmoose",
+                                          "Predicted bull moose" = "TotalBulls",
+                                          "Predicted cow moose" = "TotalCows",
+                                          "Predicted calf moose" = "TotalCalves",
+                                          "Stratification map" = "strat_map",
+                                          "Stratification + counts" = "strat_map_w_counts"),
+                              selected = NULL ,selectize = T,
+                              multiple = FALSE)),
+                  div(style="display: inline-block;vertical-align:top; width: 150px;",
+                      br(),
+                  actionButton(paste(idcount(), "maps", sep = ""), "Create map")))),
+                  uiOutput(paste(thisid, "metric", sep = "")),
+                  div(id = paste(thisid, 4, sep = ""))
+
                           ), select=TRUE)
 
 
@@ -526,23 +543,23 @@ icon('times')
       })
 
 
-      withProgress(message = "Computing results", detail = "fetching data", value = 0, {
+    withProgress(message = "Computing results", detail = "fetching data", value = 0, {
 
 
-        incProgress(0.25, detail = "computing abundance")
+    incProgress(0.25, detail = "computing abundance")
 
-      # Run the GSPE code on the data
-      values[[paste(thisid, "table_data", sep = "")]]<-AA_tables(values$moose.dat, input$columns)
+    # Run the GSPE code on the data
+    values[[paste(thisid, "table_data", sep = "")]]<-AA_tables(values$moose.dat, input$columns)
+    values[[paste(thisid, "table_data", sep = "")]]$moose.dat<-values$moose.dat
+    table_data<-values[[paste(thisid, "table_data", sep = "")]]
 
-      table_data<-values[[paste(thisid, "table_data", sep = "")]]
-
-
-
-
-      insertUI(selector = paste("#",thisid, 1, sep = ""), where = "beforeEnd",
-               ui = DT::dataTableOutput(paste(thisid, "GSPE_table_abundance_SCF", sep = "")) %>% withSpinner(color="#0dc5c1"))
 
     # Abundance table output
+
+    insertUI(selector = paste("#",thisid, 1, sep = ""), where = "beforeEnd",
+               ui = DT::dataTableOutput(paste(thisid, "GSPE_table_abundance_SCF", sep = "")) %>% withSpinner(color="#0dc5c1"))
+
+
     output[[paste(thisid, "GSPE_table_abundance_SCF", sep = "")]]<-DT::renderDataTable({
       abundance_data<-
         as.data.frame(rbind(table_data[["total_abundance"]],
@@ -591,106 +608,107 @@ icon('times')
       }
       else{
         SCF<-as.data.frame(table_data[["total_abundance"]])[,c("Area", "Total.Est", "High.Est", "Low.Est")]
-        SCF[,c("Total.Est", "High.Est", "Low.Est")]<-round(SCF[,c("Total.Est", "High.Est", "Low.Est")]*input[[paste(thisid, "SCF_standard", sep = "")]])
+        SCF[,c("Total.Est", "High.Est", "Low.Est")]<-round(SCF[,c("Total.Est", "High.Est", "Low.Est")]*input[[paste(thisid, "sightability_constant", sep = "")]])
         SCF
       }
     }, options = list(dom = 't'),rownames = FALSE)
 
+    # Bull:Cow table output
 
     incProgress(0.25, detail = "computing bull:cow ratios")
 
     insertUI(selector = paste("#",thisid, 2, sep = ""), where = "beforeEnd",
              ui = DT::dataTableOutput(paste(thisid, "GSPE_table_bullcow", sep = "")) %>% withSpinner(color="#0dc5c1"))
 
-
-
-    # Bull:Cow table output
     output[[paste(thisid, "GSPE_table_bullcow", sep = "")]]<-DT::renderDataTable({
       table_data$bullcow}, options = list(dom = 't'),rownames = FALSE)
 
+    # Calf:Cow table output
 
     incProgress(0.25, detail = "computing calf:cow ratios")
 
     insertUI(selector = paste("#",thisid, 3, sep = ""), where = "beforeEnd",
              ui = DT::dataTableOutput(paste(thisid, "GSPE_table_calfcow", sep = "")) %>% withSpinner(color="#0dc5c1"))
 
-    # Calf:Cow table output
     output[[paste(thisid, "GSPE_table_calfcow", sep = "")]]<-DT::renderDataTable({
-      table_data$calfcow}, options = list(dom = 't'),rownames = FALSE)
+      table_data$calfcow}, options = list(dom = 't', selection = "none"),rownames = FALSE)
 
-    # if(is.null(input$metric)){
-    #   metric<-"totalmoose"
-    # }
-    # else{
-    #   metric<-input$metric
-    # }
-    # plot_data<-values$moose.dat
-    #
-    # prediction_data<-case_when(metric == "totalmoose" ~ "total_results",
-    #                            metric == "TotalBulls" ~ "bull_results",
-    #                            metric == "TotalCows" ~ "cow_results",
-    #                            metric == "TotalCalves" ~ "calf_results")
-    #
-    # # If we want a different map (This takes some time, depending on the zoom)
-    # # Google map API key workaround
-    # height <- max(plot_data$centrlat) - min(plot_data$centrlat)
-    # width <- max(plot_data$centrlon) - min(plot_data$centrlon)
-    # borders <- c(bottom  = min(plot_data$centrlat)  - 0.1 * height,
-    #              top     = max(plot_data$centrlat)  + 0.1 * height,
-    #              left    = min(plot_data$centrlon) - 0.1 * width,
-    #              right   = max(plot_data$centrlon) + 0.1 * width)
-    #
-    # A <- get_stamenmap(borders, zoom = 10, maptype = "terrain")
-    #
-    # metric_label<-case_when(metric == "totalmoose" ~ "Total",
-    #                         metric == "TotalBulls" ~ "Bull",
-    #                         metric == "TotalCows" ~ "Cow",
-    #                         metric == "TotalCalves" ~ "Calf")
-    #
-    #
-    # surv_results_predictions<-table_data[[prediction_data]][[1]]$predictions
-    #
-    # plot_data<- cbind(plot_data, surv_results_predictions[,4:5])
-    #
-    # pred_plot<-ggmap(A)+geom_tile(data = plot_data, aes(x=centrlon,y=centrlat,fill= log(Est+1)),alpha= 1,colour="black")+
-    #   geom_text(data=subset(plot_data, Counted== TRUE),aes_string(x="centrlon",y="centrlat",label= metric), color = "white", size = 5)+
-    #   ggtitle(paste(plot_data$SurveyName),subtitle = paste(plot_data$Surveyyear, plot_data$Season, "Predicted", metric_label,"Moose Abundance"))+
-    #   labs(x = "", y = "", fill = "Moose")+
-    #   scale_fill_gradient(breaks = log(c(0, 5, 15, 30, 60, 120, 200)+1),
-    #                       labels = c(0, 5, 15, 30, 60, 120, 200))+
-    #   theme(plot.title = element_text(family = "Trebuchet MS", color="#666666", face="bold", size=22, hjust=0),
-    #         plot.subtitle  = element_text(family = "Trebuchet MS", color="#666666", face="bold", size=18, hjust=0),
-    #         legend.text = element_text(family = "Trebuchet MS", color="#666666", face="bold", size=15),
-    #         axis.title = element_text(family = "Trebuchet MS", color="#666666", face="bold", size=12),
-    #         legend.title = element_text(family = "Trebuchet MS", color="#666666", face="bold", size=15),
-    #         axis.text = element_text(family = "Trebuchet MS", color="#666666", face="bold", size=12),
-    #         legend.position = "right",
-    #         panel.background = element_rect(fill = "white", colour = "#666666"),
-    #         panel.grid.major = element_line(size = 0.0005, linetype = 'solid',
-    #                                         colour = "grey"),
-    #         legend.key.size = unit(2.5, "cm"))
-    #
-    #
-    # insertUI(selector = paste("#",thisid, 4, sep = ""), where = "beforeEnd",
-    #          ui = plotOutput(paste(thisid, "GSPE_plot", sep = "")) %>% withSpinner(color="#0dc5c1"))
-    #
-    #
-    # # Abundance heat map
-    # output[[paste(thisid, "GSPE_plot", sep = "")]] <- renderPlot({
-    #
-    #   pred_plot
-    # }, height = 1000, units = "px")
 
     updateTabsetPanel(session, "abundance_tabs",
                       selected = paste("GSPE details:", values$authorized_surveys[input$tbl_rows_selected,"surveyname"], " ", values$authorized_surveys[input$tbl_rows_selected,"surveyyear"])
     )
 
 })
-
-
     })
 
 
+observeEvent(input[[paste(idcount(), "maps", sep = "")]],{
+
+  thisid <- idcount()
+  idcount(thisid)
+  thisid <- paste0("GSPE", thisid)
+
+  table_data<-values[[paste(thisid, "table_data", sep = "")]]
+  # If we want a different map (This takes some time, depending on the zoom)
+  # Google map API key workaround
+  height <- max(table_data$moose.dat$centrlat) - min(table_data$moose.dat$centrlat)
+  width <- max(table_data$moose.dat$centrlon) - min(table_data$moose.dat$centrlon)
+  borders <- c(bottom  = min(table_data$moose.dat$centrlat)  - 0.1 * height,
+               top     = max(table_data$moose.dat$centrlat)  + 0.1 * height,
+               left    = min(table_data$moose.dat$centrlon) - 0.1 * width,
+               right   = max(table_data$moose.dat$centrlon) + 0.1 * width)
+
+
+  insertUI(selector = paste("#",thisid, 4, sep = ""), where = "beforeEnd",
+           ui = plotOutput(paste(thisid, "GSPE_plot", sep = ""))%>% withSpinner(color="#0dc5c1") )
+
+  output[[paste(thisid, "GSPE_plot", sep = "")]] <- renderPlot({
+    # Abundance heat map
+
+
+
+    A <- get_stamenmap(borders, zoom = 10, maptype = "terrain")
+
+
+    prediction_metric<-case_when(input[[paste(thisid, "metric", sep = "")]] == "totalmoose" ~ "total_results",
+                                 input[[paste(thisid, "metric", sep = "")]] == "TotalBulls" ~ "bull_results",
+                                 input[[paste(thisid, "metric", sep = "")]] == "TotalCows" ~ "cow_results",
+                                 input[[paste(thisid, "metric", sep = "")]] == "TotalCalves" ~ "calf_results")
+
+
+    plot_data<- cbind(table_data$moose.dat,
+                      table_data[[prediction_metric]][[1]]$predictions[,4:5])
+
+
+    metric_label<-case_when(input[[paste(thisid, "metric", sep = "")]] == "totalmoose" ~ "Total",
+                            input[[paste(thisid, "metric", sep = "")]] == "TotalBulls" ~ "Bull",
+                            input[[paste(thisid, "metric", sep = "")]] == "TotalCows" ~ "Cow",
+                            input[[paste(thisid, "metric", sep = "")]] == "TotalCalves" ~ "Calf")
+
+
+    pred_plot<-ggmap(A)+geom_tile(data = plot_data, aes(x=centrlon,y=centrlat,fill= log(Est+1)),alpha= 1,colour="black")+
+      geom_text(data=subset(plot_data, Counted== TRUE),aes_string(x="centrlon",y="centrlat",label= input[[paste(thisid, "metric", sep = "")]]), color = "white", size = 5)+
+      ggtitle(paste(plot_data$SurveyName),subtitle = paste(plot_data$Surveyyear, plot_data$Season, "Predicted", metric_label,"Moose Abundance"))+
+      labs(x = "", y = "", fill = "Moose")+
+      scale_fill_gradient(breaks = log(c(0, 5, 15, 30, 60, 120, 200)+1),
+                          labels = c(0, 5, 15, 30, 60, 120, 200))+
+      theme(plot.title = element_text(family = "Trebuchet MS", color="#666666", face="bold", size=22, hjust=0),
+            plot.subtitle  = element_text(family = "Trebuchet MS", color="#666666", face="bold", size=18, hjust=0),
+            legend.text = element_text(family = "Trebuchet MS", color="#666666", face="bold", size=15),
+            axis.title = element_text(family = "Trebuchet MS", color="#666666", face="bold", size=12),
+            legend.title = element_text(family = "Trebuchet MS", color="#666666", face="bold", size=15),
+            axis.text = element_text(family = "Trebuchet MS", color="#666666", face="bold", size=12),
+            legend.position = "right",
+            panel.background = element_rect(fill = "white", colour = "#666666"),
+            panel.grid.major = element_line(size = 0.0005, linetype = 'solid',
+                                            colour = "grey"),
+            legend.key.size = unit(2.5, "cm"))
+        pred_plot
+      }, height = 1000, units = "px")
+
+
+
+})
 
     ############################
     # Trend Analysis
