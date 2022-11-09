@@ -543,7 +543,7 @@ observeEvent(input$tbl_rows_selected,{
 
 
     updateTabsetPanel(session, "abundance_tabs",
-                      selected = paste("GSPE details:", values$authorized_surveys[input$tbl_rows_selected,"surveyname"], " ", values$authorized_surveys[input$tbl_rows_selected,"surveyyear"])
+                      selected = paste("GSPE details:", values$authorized_surveys[input$tbl_rows_selected,"surveyname"], " ", values$authorized_surveys[input$tbl_rows_selected,"surveyyear"], idcount())
     )
 
 })
@@ -659,9 +659,9 @@ observeEvent(input[[paste(idcount(), "maps", sep = "")]],{
     observeEvent(input$Trend , {
       withProgress(message = "Computing results", detail = "fetching data", value = 0, {
 
-      trend_thisid <- trend_idcount() + 1
-      trend_idcount(trend_thisid)
-      trend_thisid <- paste0("trend", trend_thisid)
+      thisid <- idcount() + 1
+      idcount(thisid)
+      thisid <- paste0("trend", thisid)
 
       observeEvent(input$remove_data_tab, {
         isolate({ removeTab(inputId = "abundance_tabs", target = input$remove_data_tab)})
@@ -669,33 +669,33 @@ observeEvent(input[[paste(idcount(), "maps", sep = "")]],{
 
     appendTab("abundance_tabs",
     tabPanel(
-      value = paste(values$authorized_surveys[input$tbl_rows_selected,"surveyname"], " ", values$authorized_surveys[input$tbl_rows_selected,"surveyyear"], "Trend analysis",trend_idcount()),
+      value = paste(values$authorized_surveys[input$tbl_rows_selected,"surveyname"], " ", values$authorized_surveys[input$tbl_rows_selected,"surveyyear"], "Trend analysis",idcount()),
       title = tab_title(paste(values$authorized_surveys[input$tbl_rows_selected,"surveyname"], " ", values$authorized_surveys[input$tbl_rows_selected,"surveyyear"], "Trend analysis")),
       h4(strong("Trend Analysis")),
-      uiOutput(paste(trend_thisid, "trend_plot_metric", sep = "")),
-      plotOutput(paste(trend_thisid, "matching_abundance_plot", sep = "")),
-      plotOutput(paste(trend_thisid, "matching_composition_plot", sep = "")),
-      h5("Composition"),
       fluidRow(
-      column(width = 9,
-             fluidRow(
-               column(10,
-                      h5("Trend Data")),
-               column(2,
-                      div(id = paste(trend_thisid, "remove_from_trend", sep = ""),
-                          uiOutput(paste(trend_thisid, "remove_from_trend", sep = ""))))),
-             DT::dataTableOutput(paste(trend_thisid, "trend_data_selection_table", sep = ""))%>% withSpinner(color="#0dc5c1")) ,
-      column(width = 3,
-             fluidRow(
-               column(7,
-                      h5("Removed Data")),
-               column(5,
-                      div(id = paste(trend_thisid, "add_to_trend", sep = ""),
-                          uiOutput(paste(trend_thisid, "add_to_trend", sep = ""))))),
-             DT::dataTableOutput(paste(trend_thisid, "trend_removed_data_selection_table", sep = ""))%>% withSpinner(color="#0dc5c1"))),
+        column(width = 9,
+               fluidRow(
+                 column(10,
+                        h5("Trend Data")),
+                 column(2,
+                        div(id = paste(thisid, "remove_from_trend", sep = ""),
+                            uiOutput(paste(thisid, "remove_from_trend", sep = ""))))),
+               DT::dataTableOutput(paste(thisid, "trend_data_selection_table", sep = ""))%>% withSpinner(color="#0dc5c1")) ,
+        column(width = 3,
+               fluidRow(
+                 column(7,
+                        h5("Removed Data")),
+                 column(5,
+                        div(id = paste(thisid, "add_to_trend", sep = ""),
+                            uiOutput(paste(thisid, "add_to_trend", sep = ""))))),
+               DT::dataTableOutput(paste(thisid, "trend_removed_data_selection_table", sep = ""))%>% withSpinner(color="#0dc5c1"))),
+      uiOutput(paste(thisid, "trend_plot_metric", sep = "")),
+      plotOutput(paste(thisid, "matching_abundance_plot", sep = "")),
+      uiOutput(paste(thisid, "trend_percent_comp_plot_metric", sep = "")),
+      plotOutput(paste(thisid, "matching_composition_plot", sep = "")),
       br(),
       p(paste("Shown are all surveys that fully contain the area in the", values$authorized_surveys[input$tbl_rows_selected,'surveyname'], " ", values$authorized_surveys[input$tbl_rows_selected,'surveyyear'], "survey or analysis area (if entered).
-        The abundance estimates shown are for that specific area only, even if that area was surveyed as a part of a larger survey.
+        The abundance estimates shown are for that specific area only, even if the area was a subset of a larger survey in a given year.
         In other words, these are apples-to-apples abundance comparisons of the searched area.")),
       br(),
       p("Some surveys entered into the database may be experimental or redundant.
@@ -706,42 +706,42 @@ observeEvent(input[[paste(idcount(), "maps", sep = "")]],{
 
 
       # Extract Unit IDs to search
-      values[[paste(trend_thisid, "moose_dat", sep = "")]]<-values$moose.dat
+      values[[paste(thisid, "moose_dat", sep = "")]]<-values$moose.dat
 
-      unit_IDs<-values[[paste(trend_thisid, "moose_dat", sep = "")]]$UnitID
+      unit_IDs<-values[[paste(thisid, "moose_dat", sep = "")]]$UnitID
 
       l<-length(unit_IDs)
 
 
-#       # Find surveys that at least PARTIALLY include area of interest
-#       incProgress(0.1, detail = "Finding matching surveys")
-#
-#       partial <-
-#         tbl(values$moose, "v_wc_moosepop_reprospreadsheet") %>%
-#         filter(UnitID %in% unit_IDs) %>%
-#         collect() %>%
-#         dplyr::select(SurveyID)
-#
-#       survey_IDs_partial<- unique(partial$SurveyID)
-#
-#       # Get all survey data from the partial matches
-#       incProgress(0.05, detail = "Finding matching surveys")
-#
-#       partial_match_data <- dbGetQuery(values$moose,
-#                                        paste("exec spr_wc_moosepop_reprospreadsheet @SurveyIDList = '",
-#                                              paste(as.character(survey_IDs_partial), sep="' '", collapse=", "),
-#                                          "'", sep = ""))
-#
-#       # Identify only the surveys that include the entire AA
-#       incProgress(0.05, detail = "Filtering to only matched area")
-#
-#       partial_match_data<-
-#         partial_match_data %>%
-#         filter(UnitID %in% unit_IDs) %>%
-#         group_by(SurveyID, SurveyName, Surveyyear) %>%
-#         dplyr::summarise(n = n()) %>%
-#         ungroup() %>%
-#         dplyr::filter(n == l)
+      # # Find surveys that at least PARTIALLY include area of interest
+      # incProgress(0.1, detail = "Finding matching surveys")
+      #
+      # partial <-
+      #   tbl(values$moose, "v_wc_moosepop_reprospreadsheet") %>%
+      #   filter(UnitID %in% unit_IDs) %>%
+      #   collect() %>%
+      #   dplyr::select(SurveyID)
+      #
+      # survey_IDs_partial<- unique(partial$SurveyID)
+      #
+      # # Get all survey data from the partial matches
+      # incProgress(0.05, detail = "Finding matching surveys")
+      #
+      # partial_match_data <- dbGetQuery(values$moose,
+      #                                  paste("exec spr_wc_moosepop_reprospreadsheet @SurveyIDList = '",
+      #                                        paste(as.character(survey_IDs_partial), sep="' '", collapse=", "),
+      #                                    "'", sep = ""))
+      #
+      # # Identify only the surveys that include the entire AA
+      # incProgress(0.05, detail = "Filtering to only matched area")
+      #
+      # partial_match_data<-
+      #   partial_match_data %>%
+      #   filter(UnitID %in% unit_IDs) %>%
+      #   group_by(SurveyID, SurveyName, Surveyyear) %>%
+      #   dplyr::summarise(n = n()) %>%
+      #   ungroup() %>%
+      #   dplyr::filter(n == l)
 #
 #       # Get the survey data for the surveys that include the entire AA
 #       incProgress(0.1, detail = "Fetching abundance estimates. This may take a while!")
@@ -765,12 +765,12 @@ observeEvent(input[[paste(idcount(), "maps", sep = "")]],{
 load("../../data/All20A2008matches_test.RData")
 
 
-# case_when(input[[paste(trend_thisid, "abundance_metric", sep = "")]] == "Total" ~ "total_results",
-#           input[[paste(trend_thisid, "abundance_metric", sep = "")]] == "Bulls" ~ "bull_results",
-#           input[[paste(trend_thisid, "abundance_metric", sep = "")]] == "TotalCows" ~ "cow_results",
-#           input[[paste(trend_thisid, "abundance_metric", sep = "")]] == "TotalCalves" ~ "calf_results",
+# case_when(input[[paste(thisid, "abundance_metric", sep = "")]] == "Total" ~ "total_results",
+#           input[[paste(thisid, "abundance_metric", sep = "")]] == "Bulls" ~ "bull_results",
+#           input[[paste(thisid, "abundance_metric", sep = "")]] == "TotalCows" ~ "cow_results",
+#           input[[paste(thisid, "abundance_metric", sep = "")]] == "TotalCalves" ~ "calf_results",
 
-      # Extract just the total abundance estimate
+      # Extract just the abundance estimates
       trend_data<-rbind(
         map_df(out.all,  1) %>% mutate(metric = "Total"),
         map_df(out.all,  2) %>% mutate(metric = "Bulls"),
@@ -793,20 +793,29 @@ load("../../data/All20A2008matches_test.RData")
                       redundant = length(Surveyyear))
 
 
-      values[[paste(trend_thisid, "trend_data", sep = "")]]<-trend_data %>%
+      # # Extract just the composition estimates
+      # trend_comp_data<-rbind(
+      #   map_df(out.all,  7) %>% mutate(metric = "BullCow"),
+      #   map_df(out.all,  8) %>% mutate(metric = "CalfCow"))
+      #
+
+
+
+
+      values[[paste(thisid, "trend_data", sep = "")]]<-trend_data %>%
         arrange(Surveyyear) %>%
         filter(metric == "Total")
 
 
 
-      values[[paste(trend_thisid, "removed_trend_data", sep = "")]]<-
-        data.frame(matrix(ncol=length(colnames(values[[paste(trend_thisid, "trend_data", sep = "")]])),
+      values[[paste(thisid, "removed_trend_data", sep = "")]]<-
+        data.frame(matrix(ncol=length(colnames(values[[paste(thisid, "trend_data", sep = "")]])),
                           nrow=0,
-                          dimnames=list(NULL, colnames(values[[paste(trend_thisid, "trend_data", sep = "")]]))))
+                          dimnames=list(NULL, colnames(values[[paste(thisid, "trend_data", sep = "")]]))))
 
 
-    output[[paste(trend_thisid, "trend_data_selection_table", sep = "")]]<-DT::renderDataTable(server = FALSE,{
-      datatable(values[[paste(trend_thisid, "trend_data", sep = "")]][,c("SurveyName",
+    output[[paste(thisid, "trend_data_selection_table", sep = "")]]<-DT::renderDataTable(server = FALSE,{
+      datatable(values[[paste(thisid, "trend_data", sep = "")]][,c("SurveyName",
                                                                          "Surveyyear",
                                                                          "Total.Est",
                                                                          "High.Est",
@@ -830,8 +839,8 @@ load("../../data/All20A2008matches_test.RData")
                 rownames = FALSE)
     })
 
-    output[[paste(trend_thisid, "trend_removed_data_selection_table", sep = "")]]<-DT::renderDataTable(server = FALSE,{
-      datatable(values[[paste(trend_thisid, "removed_trend_data", sep = "")]][,c("SurveyName",
+    output[[paste(thisid, "trend_removed_data_selection_table", sep = "")]]<-DT::renderDataTable(server = FALSE,{
+      datatable(values[[paste(thisid, "removed_trend_data", sep = "")]][,c("SurveyName",
                                                                                   "Surveyyear")]  ,
                 extensions = 'Buttons',
                 selection = 'multiple',
@@ -841,31 +850,31 @@ load("../../data/All20A2008matches_test.RData")
 
 
 
-    output[[paste(trend_thisid, "add_to_trend", sep = "")]]<-renderUI({
-      req(input[[paste(trend_thisid, "trend_removed_data_selection_table_rows_selected", sep = "")]])
-      actionButton(paste(trend_thisid, "add_to_trend", sep = ""), "Add back to trend ")
+    output[[paste(thisid, "add_to_trend", sep = "")]]<-renderUI({
+      req(input[[paste(thisid, "trend_removed_data_selection_table_rows_selected", sep = "")]])
+      actionButton(paste(thisid, "add_to_trend", sep = ""), "Add back to trend ")
     })
 
-    output[[paste(trend_thisid, "remove_from_trend", sep = "")]]<-renderUI({
-      req(input[[paste(trend_thisid, "trend_data_selection_table_rows_selected", sep = "")]])
-      actionButton(paste(trend_thisid, "remove_from_trend", sep = ""), "Remove from trend ")
+    output[[paste(thisid, "remove_from_trend", sep = "")]]<-renderUI({
+      req(input[[paste(thisid, "trend_data_selection_table_rows_selected", sep = "")]])
+      actionButton(paste(thisid, "remove_from_trend", sep = ""), "Remove from trend ")
     })
 
 
-    observeEvent(input[[paste(trend_thisid, "trend_removed_data_selection_table_rows_selected", sep = "")]],{
-      toggle(paste(trend_thisid, "add_to_trend", sep = ""), condition = is.numeric(input[[paste(trend_thisid, "trend_removed_data_selection_table_rows_selected", sep = "")]]))
+    observeEvent(input[[paste(thisid, "trend_removed_data_selection_table_rows_selected", sep = "")]],{
+      toggle(paste(thisid, "add_to_trend", sep = ""), condition = is.numeric(input[[paste(thisid, "trend_removed_data_selection_table_rows_selected", sep = "")]]))
     })
 
-    observeEvent(input[[paste(trend_thisid, "remove_from_trend", sep = "")]],{
+    observeEvent(input[[paste(thisid, "remove_from_trend", sep = "")]],{
 
-      if (!is.null(input[[paste(trend_thisid, "trend_data_selection_table_rows_selected", sep = "")]])) {
+      if (!is.null(input[[paste(thisid, "trend_data_selection_table_rows_selected", sep = "")]])) {
 
-        values[[paste(trend_thisid, "removed_trend_data", sep = "")]] <-
-          rbind(values[[paste(trend_thisid, "removed_trend_data", sep = "")]],
-                values[[paste(trend_thisid, "trend_data", sep = "")]][as.numeric(input[[paste(trend_thisid, "trend_data_selection_table_rows_selected", sep = "")]]),])
+        values[[paste(thisid, "removed_trend_data", sep = "")]] <-
+          rbind(values[[paste(thisid, "removed_trend_data", sep = "")]],
+                values[[paste(thisid, "trend_data", sep = "")]][as.numeric(input[[paste(thisid, "trend_data_selection_table_rows_selected", sep = "")]]),])
 
-        values[[paste(trend_thisid, "trend_data", sep = "")]] <-
-          values[[paste(trend_thisid, "trend_data", sep = "")]][-as.numeric(input[[paste(trend_thisid, "trend_data_selection_table_rows_selected", sep = "")]]),] %>%
+        values[[paste(thisid, "trend_data", sep = "")]] <-
+          values[[paste(thisid, "trend_data", sep = "")]][-as.numeric(input[[paste(thisid, "trend_data_selection_table_rows_selected", sep = "")]]),] %>%
           group_by(Surveyyear) %>%
           dplyr::mutate(redundant_name = SurveyName,
                         redundant = length(Surveyyear))
@@ -875,27 +884,29 @@ load("../../data/All20A2008matches_test.RData")
     })
 
 
-    observeEvent(input[[paste(trend_thisid, "add_to_trend", sep = "")]],{
+    observeEvent(input[[paste(thisid, "add_to_trend", sep = "")]],{
 
-      if (!is.null(input[[paste(trend_thisid, "trend_removed_data_selection_table_rows_selected", sep = "")]])) {
+      if (!is.null(input[[paste(thisid, "trend_removed_data_selection_table_rows_selected", sep = "")]])) {
 
-        values[[paste(trend_thisid, "removed_trend_data", sep = "")]] <-
-          values[[paste(trend_thisid, "removed_trend_data", sep = "")]][-as.numeric(input[[paste(trend_thisid, "trend_removed_data_selection_table_rows_selected", sep = "")]]),]
-
-
-        values[[paste(trend_thisid, "trend_data", sep = "")]] <-
-          rbind(values[[paste(trend_thisid, "trend_data", sep = "")]],
-          values[[paste(trend_thisid, "removed_trend_data", sep = "")]][as.numeric(input[[paste(trend_thisid, "trend_removed_data_selection_table_rows_selected", sep = "")]]),]) %>%
+        values[[paste(thisid, "trend_data", sep = "")]] <-
+          rbind(values[[paste(thisid, "trend_data", sep = "")]],
+                values[[paste(thisid, "removed_trend_data", sep = "")]][as.numeric(input[[paste(thisid, "trend_removed_data_selection_table_rows_selected", sep = "")]]),]) %>%
           group_by(Surveyyear) %>%
           dplyr::mutate(redundant_name = SurveyName,
                         redundant = length(Surveyyear))
+
+        values[[paste(thisid, "removed_trend_data", sep = "")]] <-
+          values[[paste(thisid, "removed_trend_data", sep = "")]][-as.numeric(input[[paste(thisid, "trend_removed_data_selection_table_rows_selected", sep = "")]]),]
+
+
+
       }
     })
 
-    output[[paste(trend_thisid, "trend_plot_metric", sep = "")]]<-renderUI({
-      if(sum(na.omit(values[[paste(trend_thisid, "trend_data", sep = "")]]$redundant)) == length(na.omit(values[[paste(trend_thisid, "trend_data", sep = "")]]$redundant))){
+    output[[paste(thisid, "trend_plot_metric", sep = "")]]<-renderUI({
+      if(sum(na.omit(values[[paste(thisid, "trend_data", sep = "")]]$redundant)) == length(na.omit(values[[paste(thisid, "trend_data", sep = "")]]$redundant))){
         h5("Abundance")
-      checkboxGroupInput(paste(trend_thisid, "trend_plot_metric", sep = ""), "",choices = c("Total", "Bulls", "Cows", "Calves"), selected = "Total")
+      checkboxGroupInput(paste(thisid, "trend_plot_metric", sep = ""), "",choices = c("Total", "Bulls", "Cows", "Calves"), selected = "Total", inline = T)
       }else{
         h6("There exist redundant/misleading surveys in the database. Select unwanted/duplicate surveys in the table below to remove them from the analysis. Efforts should be made to delete these surveys from the database.")
       }
@@ -903,66 +914,82 @@ load("../../data/All20A2008matches_test.RData")
     })
 
 
-    output[[paste(trend_thisid, "matching_abundance_plot", sep = "")]]<- renderPlot({
-        if(!is.null(input[[paste(trend_thisid, "trend_plot_metric", sep = "")]])){
-          values[[paste(trend_thisid, "trend_abundance_plot_data", sep = "")]]<-trend_data %>%
+
+    output[[paste(thisid, "trend_percent_comp_plot_metric", sep = "")]]<-renderUI({
+      if(sum(na.omit(values[[paste(thisid, "trend_data", sep = "")]]$redundant)) != length(na.omit(values[[paste(thisid, "trend_data", sep = "")]]$redundant))){
+        h6("Composition plot will display when only one survey exists in each year of the analysis.")
+      }else{
+        checkboxGroupInput(paste(thisid, "trend_percent_comp_plot_metric", sep = ""), "",choices = c("Bulls", "Cows", "Calves"), selected = c("Bulls", "Cows", "Calves"), inline = T)
+      }
+
+    })
+
+    output[[paste(thisid, "matching_abundance_plot", sep = "")]]<- renderPlot({
+        if(!is.null(input[[paste(thisid, "trend_plot_metric", sep = "")]])){
+          values[[paste(thisid, "trend_abundance_plot_data", sep = "")]]<-trend_data %>%
             arrange(Surveyyear) %>%
-            filter(is.element(metric, input[[paste(trend_thisid, "trend_plot_metric", sep = "")]])) %>%
-            filter(SurveyName %in% unique(as.data.frame(values[[paste(trend_thisid, "trend_data", sep = "")]])[,"SurveyName"])) %>%
-            filter(is.element(Surveyyear, as.data.frame(values[[paste(trend_thisid, "trend_data", sep = "")]])[,"Surveyyear"]))
+            filter(is.element(metric, input[[paste(thisid, "trend_plot_metric", sep = "")]])) %>%
+            filter(paste0(SurveyName, Surveyyear) %in%
+                     unique(paste0(
+                       as.data.frame(values[[paste(thisid, "trend_data", sep = "")]])[,"SurveyName"],
+                       as.data.frame(values[[paste(thisid, "trend_data", sep = "")]])[,"Surveyyear"]))) %>%
+            filter(!is.na(Total.Est)) %>%
+            group_by(Surveyyear, metric) %>%
+            dplyr::mutate(redundant_name = SurveyName,
+                          redundant = length(Surveyyear))
         }else{
-          values[[paste(trend_thisid, "trend_abundance_plot_data", sep = "")]]<-values[[paste(trend_thisid, "trend_data", sep = "")]]
+          values[[paste(thisid, "trend_abundance_plot_data", sep = "")]]<-values[[paste(thisid, "trend_data", sep = "")]] %>%
+            filter(!is.na(Total.Est)) %>%
+            group_by(Surveyyear, metric) %>%
+            dplyr::mutate(redundant_name = SurveyName,
+                          redundant = length(Surveyyear))
 
 
         }
 
 
-data<-values[[paste(trend_thisid, "trend_abundance_plot_data", sep = "")]] %>%
-        filter(!is.na(Total.Est)) %>%
-        group_by(Surveyyear, metric) %>%
-        dplyr::mutate(redundant_name = SurveyName,
-                      redundant = length(Surveyyear))
-
-      labels<-as.character(seq(min(data$Surveyyear), max(data$Surveyyear), by = 1))
+      labels<-as.character(seq(min(values[[paste(thisid, "trend_abundance_plot_data", sep = "")]]$Surveyyear), max(values[[paste(thisid, "trend_abundance_plot_data", sep = "")]]$Surveyyear), by = 1))
 
       # labels[(seq(min(data$Surveyyear), max(data$Surveyyear), by = 1)%%2 == 1)]<-''
 
 
-      myColors <- c(brewer.pal(length(unique(data$redundant_name)),"Set1"))
-      names(myColors) <- c(unique(data$redundant_name))
-      colScale <- scale_colour_manual(name = names(myColors),values = myColors)
-
-
-      if(sum(na.omit(data$redundant)) != length(na.omit(data$redundant))){
+      if(sum(na.omit(values[[paste(thisid, "trend_abundance_plot_data", sep = "")]]$redundant)) != length(na.omit(values[[paste(thisid, "trend_abundance_plot_data", sep = "")]]$redundant))){
+        myColors <- c(brewer.pal(length(unique(values[[paste(thisid, "trend_abundance_plot_data", sep = "")]]$redundant_name)),"Set1"))
+        names(myColors) <- c(unique(values[[paste(thisid, "trend_abundance_plot_data", sep = "")]]$redundant_name))
         colScale <- scale_color_manual(name = names(myColors),values = myColors)
         colvar<-"as.factor(redundant_name)"
         y_label<-"Moose"
 
-      }else if( length(input[[paste(trend_thisid, "trend_plot_metric", sep = "")]]) > 1 ){
-        colScale <- scale_color_manual(values = c("Total" = "Black", "Cows" = "Pink","Bulls" = "Blue","Calves" = "Green"))
+      }else if( length(input[[paste(thisid, "trend_plot_metric", sep = "")]]) > 1 ){
+        myColors <- c(brewer.pal(4,"Set1"))
+        colscale_values<-c("Total" = myColors[1],
+                           "Cows" = myColors[4],
+                           "Bulls" = myColors[2],
+                           "Calves" = myColors[3])[which(is.element(c("Total", "Cows", "Bulls", "Calves"), input[[paste(thisid, "trend_plot_metric", sep = "")]]))]
+        colScale <- scale_colour_manual(values = colscale_values)
         colvar<-"metric"
         y_label<-"Moose"
       }else{
         colScale <- NULL
         colvar<- NULL
-        y_label<-input[[paste(trend_thisid, "trend_plot_metric", sep = "")]]
+        y_label<-input[[paste(thisid, "trend_plot_metric", sep = "")]]
       }
 
-      ggplot(data, aes_string(x = "Surveyyear",
+      ggplot(values[[paste(thisid, "trend_abundance_plot_data", sep = "")]], aes_string(x = "Surveyyear",
                        color = colvar))+
         geom_point(aes( y = Total.Est),
                    position = position_dodge(width = .5))+
         geom_errorbar(aes(ymin = Total.Est - Total.SE, ymax = Total.Est + Total.SE),
                       position = position_dodge(width = .5),
                       width = 6/length(labels))+
-        scale_y_continuous(limits = c(0,max(data$Total.Est) + max(data$Total.SE)),
-                           breaks = seq(0, max(data$Total.Est) + max(data$Total.SE), by = 1000))+
-        scale_x_continuous(limits=c(min(data$Surveyyear)-.5,max(data$Surveyyear)+.5),
-                           breaks=seq(min(data$Surveyyear), max(data$Surveyyear), by = 1),
+        scale_y_continuous(limits = c(0,max(values[[paste(thisid, "trend_abundance_plot_data", sep = "")]]$Total.Est) + max(values[[paste(thisid, "trend_abundance_plot_data", sep = "")]]$Total.SE)),
+                           breaks = seq(0, max(values[[paste(thisid, "trend_abundance_plot_data", sep = "")]]$Total.Est) + max(values[[paste(thisid, "trend_abundance_plot_data", sep = "")]]$Total.SE), by = 1000))+
+        scale_x_continuous(limits=c(min(values[[paste(thisid, "trend_abundance_plot_data", sep = "")]]$Surveyyear)-.5,max(values[[paste(thisid, "trend_abundance_plot_data", sep = "")]]$Surveyyear)+.5),
+                           breaks=seq(min(values[[paste(thisid, "trend_abundance_plot_data", sep = "")]]$Surveyyear), max(values[[paste(thisid, "trend_abundance_plot_data", sep = "")]]$Surveyyear), by = 1),
                            labels = labels)+
         colScale+
         labs(y = paste(y_label), x = "", color  = "")+
-        ggtitle(paste("All matches for" ,values[[paste(trend_thisid, "moose_dat", sep = "")]]$SurveyName[1], values[[paste(trend_thisid, "moose_dat", sep = "")]]$Surveyyear[1], "survey area"))+
+        ggtitle(paste(values[[paste(thisid, "moose_dat", sep = "")]]$SurveyName[1]," Abundance"))+
         theme(plot.title = element_text(family = "Trebuchet MS", color="#666666", face="bold", size=22, hjust=0),
               plot.subtitle  = element_text(family = "Trebuchet MS", color="#666666", face="bold", size=18, hjust=0),
               axis.title = element_text(family = "Trebuchet MS", color="#666666", face="bold", size=12),
@@ -973,67 +1000,49 @@ data<-values[[paste(trend_thisid, "trend_abundance_plot_data", sep = "")]] %>%
               legend.text = element_text(family = "Trebuchet MS", color="#666666", face="bold", size=10),
               legend.key.size = unit(1.5, "cm"),
               panel.background = element_rect(fill = "white", colour = "#666666"),
-              panel.grid.major = element_line(size = 0.0005, linetype = 'solid', colour = "grey"))
+              panel.grid.minor = element_line(color = rgb(235, 235, 235, 100, maxColorValue = 255)),
+              panel.grid.major = element_line(color = "light grey"))
     })
 
-    output[[paste(trend_thisid, "matching_composition_plot", sep = "")]]<- renderPlot({
-      req(sum(na.omit(values[[paste(trend_thisid, "trend_data", sep = "")]]$redundant)) == length(na.omit(values[[paste(trend_thisid, "trend_data", sep = "")]]$redundant)))
-      if(!is.null(input[[paste(trend_thisid, "trend_plot_metric", sep = "")]])){
-        values[[paste(trend_thisid, "trend_composition_plot_data", sep = "")]]<-trend_data %>%
+    output[[paste(thisid, "matching_composition_plot", sep = "")]]<- renderPlot({
+      req(sum(na.omit(values[[paste(thisid, "trend_data", sep = "")]]$redundant)) == length(na.omit(values[[paste(thisid, "trend_data", sep = "")]]$redundant)))
+
+        values[[paste(thisid, "trend_composition_plot_data", sep = "")]]<-trend_data %>%
           arrange(Surveyyear) %>%
-          filter(is.element(metric, input[[paste(trend_thisid, "trend_plot_metric", sep = "")]])) %>%
-          filter(SurveyName %in% unique(as.data.frame(values[[paste(trend_thisid, "trend_data", sep = "")]])[,"SurveyName"])) %>%
-          filter(is.element(Surveyyear, as.data.frame(values[[paste(trend_thisid, "trend_data", sep = "")]])[,"Surveyyear"]))
-      }else{
-        values[[paste(trend_thisid, "trend_composition_plot_data", sep = "")]]<-values[[paste(trend_thisid, "trend_data", sep = "")]]
+          filter(is.element(metric, input[[paste(thisid, "trend_percent_comp_plot_metric", sep = "")]])) %>%
+          filter(paste0(SurveyName, Surveyyear) %in%
+                   unique(paste0(
+                     as.data.frame(values[[paste(thisid, "trend_data", sep = "")]])[,"SurveyName"],
+                     as.data.frame(values[[paste(thisid, "trend_data", sep = "")]])[,"Surveyyear"]))) %>%
+          filter(!is.na(Total.Est))
 
 
-      }
 
 
-      data<-values[[paste(trend_thisid, "trend_composition_plot_data", sep = "")]] %>%
 
 
-      labels<-as.character(seq(min(data$Surveyyear), max(data$Surveyyear), by = 1))
+      labels<-as.character(seq(min(values[[paste(thisid, "trend_composition_plot_data", sep = "")]]$Surveyyear), max(values[[paste(thisid, "trend_composition_plot_data", sep = "")]]$Surveyyear), by = 1))
 
-      # labels[(seq(min(data$Surveyyear), max(data$Surveyyear), by = 1)%%2 == 1)]<-''
+      # labels[(seq(min(values[[paste(thisid, "trend_composition_plot_data", sep = "")]]$Surveyyear), max(values[[paste(thisid, "trend_composition_plot_data", sep = "")]]$Surveyyear), by = 1)%%2 == 1)]<-''
+      myColors <- c(brewer.pal(4,"Set1"))
+      fillscale_values<-c("Cows" = myColors[4],
+                         "Bulls" = myColors[2],
+                         "Calves" = myColors[3])[which(is.element(c("Cows", "Bulls", "Calves"), input[[paste(thisid, "trend_percent_comp_plot_metric", sep = "")]]))]
+      fillScale <- scale_fill_manual(values = fillscale_values)
 
 
-      myColors <- c(brewer.pal(length(unique(data$redundant_name)),"Set1"))
-      names(myColors) <- c(unique(data$redundant_name))
-      colScale <- scale_colour_manual(name = names(myColors),values = myColors)
+      fillvar<-"metric"
 
 
-      if(sum(na.omit(data$redundant)) != length(na.omit(data$redundant))){
-        colScale <- scale_color_manual(name = names(myColors),values = myColors)
-        colvar<-"as.factor(redundant_name)"
-        y_label<-"Moose"
-
-      }else if( length(input[[paste(trend_thisid, "trend_plot_metric", sep = "")]]) > 1 ){
-        colScale <- scale_color_manual(values = c("Total" = "Black", "Cows" = "Pink","Bulls" = "Blue","Calves" = "Green"))
-        colvar<-"metric"
-        y_label<-"Moose"
-      }else{
-        colScale <- NULL
-        colvar<- NULL
-        y_label<-input[[paste(trend_thisid, "trend_plot_metric", sep = "")]]
-      }
-
-      ggplot(data, aes_string(x = "Surveyyear",
-                              color = colvar))+
-        geom_point(aes( y = Total.Est),
-                   position = position_dodge(width = .5))+
-        geom_errorbar(aes(ymin = Total.Est - Total.SE, ymax = Total.Est + Total.SE),
-                      position = position_dodge(width = .5),
-                      width = 6/length(labels))+
-        scale_y_continuous(limits = c(0,max(data$Total.Est) + max(data$Total.SE)),
-                           breaks = seq(0, max(data$Total.Est) + max(data$Total.SE), by = 1000))+
-        scale_x_continuous(limits=c(min(data$Surveyyear)-.5,max(data$Surveyyear)+.5),
-                           breaks=seq(min(data$Surveyyear), max(data$Surveyyear), by = 1),
+      ggplot(values[[paste(thisid, "trend_composition_plot_data", sep = "")]], aes_string(y = "Total.Est", x = "Surveyyear", fill = fillvar))+
+        geom_bar(position = "fill", stat = "identity")+
+        scale_x_continuous(limits=c(min(values[[paste(thisid, "trend_composition_plot_data", sep = "")]]$Surveyyear)-.5,max(values[[paste(thisid, "trend_composition_plot_data", sep = "")]]$Surveyyear)+.5),
+                           breaks=seq(min(values[[paste(thisid, "trend_composition_plot_data", sep = "")]]$Surveyyear), max(values[[paste(thisid, "trend_composition_plot_data", sep = "")]]$Surveyyear), by = 1),
                            labels = labels)+
-        colScale+
-        labs(y = paste(y_label), x = "", color  = "")+
-        ggtitle(paste("All matches for" ,values[[paste(trend_thisid, "moose_dat", sep = "")]]$SurveyName[1], values[[paste(trend_thisid, "moose_dat", sep = "")]]$Surveyyear[1], "survey area"))+
+        scale_y_continuous(labels = scales::percent_format(accuracy = 1), minor_breaks = seq(0,1,0.05), breaks = seq(0,1,.25))+
+        fillScale+
+        labs(y = "", x = "", fill  = "")+
+        ggtitle(paste(values[[paste(thisid, "moose_dat", sep = "")]]$SurveyName[1]," Composition"))+
         theme(plot.title = element_text(family = "Trebuchet MS", color="#666666", face="bold", size=22, hjust=0),
               plot.subtitle  = element_text(family = "Trebuchet MS", color="#666666", face="bold", size=18, hjust=0),
               axis.title = element_text(family = "Trebuchet MS", color="#666666", face="bold", size=12),
@@ -1044,7 +1053,8 @@ data<-values[[paste(trend_thisid, "trend_abundance_plot_data", sep = "")]] %>%
               legend.text = element_text(family = "Trebuchet MS", color="#666666", face="bold", size=10),
               legend.key.size = unit(1.5, "cm"),
               panel.background = element_rect(fill = "white", colour = "#666666"),
-              panel.grid.major = element_line(size = 0.0005, linetype = 'solid', colour = "grey"))
+              panel.grid.minor = element_line(color = rgb(235, 235, 235, 100, maxColorValue = 255)),
+              panel.grid.major = element_line(color = "light grey"))
     })
 
     })
