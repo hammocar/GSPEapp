@@ -189,9 +189,7 @@ server<-shinyServer(function(input, output, session) {
                            trend_data = NULL,
                            tab_change = 0) # Data from all surveys with area matches to the selected survey
 
-    survey_data_idcount <- reactiveVal(0)
-    single_GSPE_idcount <- reactiveVal(0)
-    trend_idcount <- reactiveVal(0)
+    idcount <- reactiveVal(0)
 
 # On login, establish data connection and get available surveys
     observeEvent(input$Login > 0, {
@@ -243,7 +241,7 @@ observeEvent(input$tbl_rows_selected,{
 
     output$tbl <- DT::renderDataTable({
       values$authorized_surveys <- values$authorized_surveys %>% arrange(desc(surveyyear))
-        datatable(values$authorized_surveys[,c("surveyname", "surveyyear")],
+        datatable(values$authorized_surveys[,c("surveyname", "surveyyear", "surveyid")],
                   filter = 'top',
                   selection = 'single',
                   options = list(dom = "Blrtip",
@@ -273,9 +271,10 @@ observeEvent(input$tbl_rows_selected,{
         name,
         tags$span(icon("times"),
                   style = "margin-left: 5px;",
-                  onclick = paste0("Shiny.setInputValue(\"", paste0("remove_", type, "_tab"), "\", \"", name, "\", {priority: \"event\"})"))
+                  onclick = paste0("Shiny.setInputValue(\"", paste0("remove_", type, "_tab"), "\", \"", name," ", idcount(), "\", {priority: \"event\"})"))
       )
     }
+
     ############################
     # View/download survey data
     ############################
@@ -284,9 +283,9 @@ observeEvent(input$tbl_rows_selected,{
     observeEvent(input$survey_data , {
 
 
-      survey_data_thisid <- survey_data_idcount() + 1
-      survey_data_idcount(survey_data_thisid)
-      survey_data_thisid <- paste0("survey_data", survey_data_thisid)
+      thisid <- idcount() + 1
+      idcount(thisid)
+      thisid <- paste0("survey_data", thisid)
 
 
 
@@ -300,20 +299,20 @@ observeEvent(input$tbl_rows_selected,{
                       title = "Survey Data",
                       status = "primary",
                       solidHeader = TRUE,
-                      div(id = survey_data_thisid)
+                      div(id = thisid)
                   )), select=TRUE)
 
 
-      insertUI(selector = paste("#",survey_data_thisid, sep = ""), where = "beforeEnd",
-               ui = DT::dataTableOutput(survey_data_thisid))
+      insertUI(selector = paste("#",thisid, sep = ""), where = "beforeEnd",
+               ui = DT::dataTableOutput(thisid))
 
       # This part is CRUCIAL for making new tabs not overwrite old tabs
       # It takes the survey data out of a reactive context
-      values[[survey_data_thisid]]<-values$moose.dat
-      survey_data<-values[[survey_data_thisid]]
+      values[[thisid]]<-values$moose.dat
+      survey_data<-values[[thisid]]
 
 
-      output[[survey_data_thisid]]<- DT::renderDataTable(server = FALSE, {
+      output[[thisid]]<- DT::renderDataTable(server = FALSE, {
         survey_data
         },
         extensions = 'Buttons',
@@ -342,78 +341,59 @@ observeEvent(input$tbl_rows_selected,{
     ############################
 
     observeEvent(input$GSPE ,{
-      single_GSPE_thisid <- single_GSPE_idcount() + 1
-      single_GSPE_idcount(single_GSPE_thisid)
-      single_GSPE_thisid <- paste0("GSPE", single_GSPE_thisid)
+      thisid <- idcount() + 1
+      idcount(thisid)
+      thisid <- paste0("GSPE", thisid)
 
 
-      # Add option for sightability correction using trials H/L
-      output[[paste(single_GSPE_thisid, "sightability_factor", sep = "")]]<-renderUI({
-        if(input[[paste(single_GSPE_thisid, "sightability_type", sep = "")]] == "Constant" & input[[paste(single_GSPE_thisid, "sightability", sep = "")]]){
-          fluidRow(
-            box(width = 3,
-                numericInput(paste(single_GSPE_thisid, "SCF_standard", sep = ""), "Enter a constant SCF (e.g. 1.2)", value = 1, min = 1, step = .05 )))
-        }
-        else if(input[[paste(single_GSPE_thisid, "sightability_type", sep = "")]] == "Trials" & input[[paste(single_GSPE_thisid, "sightability", sep = "")]]){
-          fluidRow(
-            box(width = 10,
-                numericInput(paste(single_GSPE_thisid, "high_trials", sep = ""), "Number of High Stratum Sightability Trials", value = 0, min = 1, step = 1),
-                numericInput(paste(single_GSPE_thisid, "high_missed", sep = ""), "Number of High Stratum Moose Missed", value = 0, min = 1, step = 1),
-                numericInput(paste(single_GSPE_thisid, "low_trials", sep = ""), "Number of Low Stratum Sightability Trials", value = 0, min = 1, step = 1),
-                numericInput(paste(single_GSPE_thisid, "low_missed", sep = ""), "Number of Low Stratum Moose Missed", value = 0, min = 1, step = 1)
-            ))
-        }
-        else{
-          NULL
-        }
 
-      })
 
       # If we want to use sightability, toggle on the sightability type choice UI
-      observeEvent(input[[paste(single_GSPE_thisid, "sightability", sep = "")]],{
+      observeEvent(input[[paste(thisid, "sightability", sep = "")]],{
+        req(!is.null(input[[paste(thisid, "sightability", sep = "")]]))
         toggle(
-          paste(single_GSPE_thisid, "sightability_type", sep = "")
+          paste(thisid, "sightability_type", sep = ""), condition = input[[paste(thisid, "sightability", sep = "")]] == TRUE
         )
       })
 
       # reactive sightability type choice UI
-      output[[paste(single_GSPE_thisid, "sightability_type", sep = "")]]<-renderUI({
+      output[[paste(thisid, "sightability_type", sep = "")]]<-renderUI({
         fluidRow(
           box(width = 4,
-              radioButtons(paste(single_GSPE_thisid, "sightability_type", sep = ""), "Type of sightability", choices = c("Trials", "Constant"), inline = T, selected = "Trials")))
+              radioButtons(paste(thisid, "sightability_type", sep = ""), "Type of sightability", choices = c("Trials", "Constant"), inline = T, selected = "Trials")))
       })
 
       # Add the UI for constant SCF
-      output[[paste(single_GSPE_thisid, "sightability_constant", sep = "")]]<-renderUI({
+      output[[paste(thisid, "sightability_constant", sep = "")]]<-renderUI({
         fluidRow(
           box(width = 4,
-              numericInput(paste(single_GSPE_thisid, "sightability_constant", sep = ""),
+              numericInput(paste(thisid, "sightability_constant", sep = ""),
                            "Enter a constant SCF (e.g., 1.2)",
                            value = 1, min = 1, step = .05 )))
 
         })
 
       # Add the UI for trials
-      output[[paste(single_GSPE_thisid, "sightability_trials", sep = "")]]<-renderUI({
+      output[[paste(thisid, "sightability_trials", sep = "")]]<-renderUI({
         fluidRow(
           column(width = 3,
                  box(width = 10, title = "High Strat",
-                     numericInput(paste(single_GSPE_thisid, "high_trials", sep = ""), "Trials", value = 0, min = 1, step = 1),
-                     numericInput(paste(single_GSPE_thisid, "high_missed", sep = ""), "Moose Missed", value = 0, min = 1, step = 1))),
+                     numericInput(paste(thisid, "high_trials", sep = ""), "Trials", value = 0, min = 1, step = 1),
+                     numericInput(paste(thisid, "high_missed", sep = ""), "Moose Missed", value = 0, min = 1, step = 1))),
           column(width = 3,
                  box(width = 10, title = "Low Strat",
-                     numericInput(paste(single_GSPE_thisid, "low_trials", sep = ""), "Trials", value = 0, min = 1, step = 1),
-                     numericInput(paste(single_GSPE_thisid, "low_missed", sep = ""), "Moose Missed", value = 0, min = 1, step = 1))),
+                     numericInput(paste(thisid, "low_trials", sep = ""), "Trials", value = 0, min = 1, step = 1),
+                     numericInput(paste(thisid, "low_missed", sep = ""), "Moose Missed", value = 0, min = 1, step = 1))),
           column(width = 6))
         })
 
       # If we want to use sightability, toggle on the sightability type choice UI
-      observeEvent(c(input[[paste(single_GSPE_thisid, "sightability_type", sep = "")]]  , input[[paste(single_GSPE_thisid, "sightability", sep = "")]] ),{
+      observeEvent(c(input[[paste(thisid, "sightability_type", sep = "")]]  , input[[paste(thisid, "sightability", sep = "")]] ),{
         toggle(
-          paste(single_GSPE_thisid, "sightability_trials", sep = ""), condition = input[[paste(single_GSPE_thisid, "sightability_type", sep = "")]] == "Trials" & input[[paste(single_GSPE_thisid, "sightability", sep = "")]]
+          paste(thisid, "sightability_trials", sep = ""), condition = input[[paste(thisid, "sightability_type", sep = "")]] == "Trials" & input[[paste(thisid, "sightability", sep = "")]]
         )
           toggle(
-            paste(single_GSPE_thisid, "sightability_constant", sep = ""), condition = input[[paste(single_GSPE_thisid, "sightability_type", sep = "")]] == "Constant" & input[[paste(single_GSPE_thisid, "sightability", sep = "")]]
+            paste(thisid, "sightability_constant", sep = ""), condition = input[[paste(thisid, "sightability_type", sep = "")]] == "Constant" & input[[paste(thisid, "sightability", sep = "")]]
           )
 
       })
@@ -421,7 +401,7 @@ observeEvent(input$tbl_rows_selected,{
 
       appendTab("abundance_tabs",
                 tabPanel(
-                  value = paste("GSPE details:", values$authorized_surveys[input$tbl_rows_selected,"surveyname"], " ", values$authorized_surveys[input$tbl_rows_selected,"surveyyear"]),
+                  value = paste("GSPE details:", values$authorized_surveys[input$tbl_rows_selected,"surveyname"], " ", values$authorized_surveys[input$tbl_rows_selected,"surveyyear"],idcount()),
                   title =tab_title( paste("GSPE details:", values$authorized_surveys[input$tbl_rows_selected,"surveyname"], " ", values$authorized_surveys[input$tbl_rows_selected,"surveyyear"])),
                   tags$script(
                     "$( document ).ready(function() {
@@ -433,22 +413,22 @@ observeEvent(input$tbl_rows_selected,{
              })"
                   ),
                   h1(strong( "GeoSpatial Population Estimate")),
-                  checkboxInput(paste(single_GSPE_thisid, "sightability", sep = ""), "Use sightability correction factor", value = FALSE),
-                  div(id = paste(single_GSPE_thisid, "sightability_type", sep = ""),
-                      uiOutput(paste(single_GSPE_thisid, "sightability_type", sep = ""))),
-                  div(id = paste(single_GSPE_thisid, "sightability_trials", sep = ""),
-                      uiOutput(paste(single_GSPE_thisid, "sightability_trials", sep = ""))),
-                  div(id = paste(single_GSPE_thisid, "sightability_constant", sep = ""),
-                      uiOutput(paste(single_GSPE_thisid, "sightability_constant", sep = ""))),
+                  checkboxInput(paste(thisid, "sightability", sep = ""), "Use sightability correction factor", value = FALSE),
+                  div(id = paste(thisid, "sightability_type", sep = ""),
+                      uiOutput(paste(thisid, "sightability_type", sep = ""))),
+                  div(id = paste(thisid, "sightability_trials", sep = ""),
+                      uiOutput(paste(thisid, "sightability_trials", sep = ""))),
+                  div(id = paste(thisid, "sightability_constant", sep = ""),
+                      uiOutput(paste(thisid, "sightability_constant", sep = ""))),
                   h4(strong("Total Abundance")),
-                  div(id = paste(single_GSPE_thisid, 1, sep = "")),
+                  div(id = paste(thisid, 1, sep = "")),
                   h4(strong("Bull:Cow Composition")),
-                  div(id = paste(single_GSPE_thisid, 2, sep = "")),
+                  div(id = paste(thisid, 2, sep = "")),
                   h4(strong("Calf:Cow Composition")),
-                  div(id = paste(single_GSPE_thisid, 3, sep = "")),
+                  div(id = paste(thisid, 3, sep = "")),
                   h4(strong("Maps")),
                     div(style="display: inline-block;vertical-align:top; width: 200px;",
-                  selectInput(paste(single_GSPE_thisid, "metric", sep = ""), "",
+                  selectInput(paste(thisid, "metric", sep = ""), "",
                               choices = c("Predicted total moose" = "totalmoose",
                                           "Predicted bull moose" = "TotalBulls",
                                           "Predicted cow moose" = "TotalCows",
@@ -459,9 +439,9 @@ observeEvent(input$tbl_rows_selected,{
                               multiple = FALSE)),
                   div(style="display: inline-block;vertical-align:top; width: 150px;",
                       br(),
-                  actionButton(paste(single_GSPE_idcount(), "maps", sep = ""), "Create map")),
-                  uiOutput(paste(single_GSPE_thisid, "metric", sep = "")),
-                  div(id = paste(single_GSPE_thisid, 4, sep = ""))
+                  actionButton(paste(idcount(), "maps", sep = ""), "Create map")),
+                  uiOutput(paste(thisid, "metric", sep = "")),
+                  div(id = paste(thisid, 4, sep = ""))
 
                           ), select=TRUE)
 
@@ -477,18 +457,18 @@ observeEvent(input$tbl_rows_selected,{
     incProgress(0.25, detail = "computing abundance")
 
     # Run the GSPE code on the data
-    values[[paste(single_GSPE_thisid, "table_data", sep = "")]]<-AA_tables(values$moose.dat, input$columns)
-    values[[paste(single_GSPE_thisid, "table_data", sep = "")]]$moose.dat<-values$moose.dat
-    table_data<-values[[paste(single_GSPE_thisid, "table_data", sep = "")]]
+    values[[paste(thisid, "table_data", sep = "")]]<-AA_tables(values$moose.dat, input$columns)
+    values[[paste(thisid, "table_data", sep = "")]]$moose.dat<-values$moose.dat
+    table_data<-values[[paste(thisid, "table_data", sep = "")]]
 
 
     # Abundance table output
 
-    insertUI(selector = paste("#",single_GSPE_thisid, 1, sep = ""), where = "beforeEnd",
-               ui = DT::dataTableOutput(paste(single_GSPE_thisid, "GSPE_table_abundance_SCF", sep = "")) %>% withSpinner(color="#0dc5c1"))
+    insertUI(selector = paste("#",thisid, 1, sep = ""), where = "beforeEnd",
+               ui = DT::dataTableOutput(paste(thisid, "GSPE_table_abundance_SCF", sep = "")) %>% withSpinner(color="#0dc5c1"))
 
 
-    output[[paste(single_GSPE_thisid, "GSPE_table_abundance_SCF", sep = "")]]<-DT::renderDataTable({
+    output[[paste(thisid, "GSPE_table_abundance_SCF", sep = "")]]<-DT::renderDataTable({
       abundance_data<-
         as.data.frame(rbind(table_data[["total_abundance"]],
                             table_data[["cow_abundance"]],
@@ -496,27 +476,27 @@ observeEvent(input$tbl_rows_selected,{
                             table_data[["calf_abundance"]])) %>%
         mutate(Metric = rep(c("Total", "Cows", "Bulls", "Calves"), each = length(input$columns)+1)) %>%
         relocate(Metric, .after = Area)
-      if(is.null(input[[paste(single_GSPE_thisid, "sightability", sep = "")]]))
+      if(is.null(input[[paste(thisid, "sightability", sep = "")]]))
 
         return(abundance_data)
 
-      if(input[[paste(single_GSPE_thisid, "sightability", sep = "")]] == FALSE | is.null(input[[paste(single_GSPE_thisid, "sightability_type", sep = "")]]))
+      if(input[[paste(thisid, "sightability", sep = "")]] == FALSE | is.null(input[[paste(thisid, "sightability_type", sep = "")]]))
 
         return(abundance_data)
 
-      if(input[[paste(single_GSPE_thisid, "sightability", sep = "")]] == TRUE & is.null(input[[paste(single_GSPE_thisid, "sightability_type", sep = "")]]) )
+      if(input[[paste(thisid, "sightability", sep = "")]] == TRUE & is.null(input[[paste(thisid, "sightability_type", sep = "")]]) )
         return(abundance_data)
 
-      if(input[[paste(single_GSPE_thisid, "sightability", sep = "")]] == TRUE & input[[paste(single_GSPE_thisid, "sightability_type", sep = "")]] == "Trials"){
+      if(input[[paste(thisid, "sightability", sep = "")]] == TRUE & input[[paste(thisid, "sightability_type", sep = "")]] == "Trials"){
         scf<-map(1:(length(input$columns)+1), ~
                  scf.apply1(hi.est = as.numeric(as.data.frame(table_data[["total_abundance"]])$High.Est[.x]),
                             lo.est = as.numeric(as.data.frame(table_data[["total_abundance"]])$Low.Est[.x]),
                             hi.se = as.numeric(as.data.frame(table_data[["total_abundance"]])$High.SE[.x]),
                             lo.se = as.numeric(as.data.frame(table_data[["total_abundance"]])$Low.SE[.x]),
-                            n.trials.hi = input[[paste(single_GSPE_thisid, "high_trials", sep = "")]],
-                            n.trials.lo = input[[paste(single_GSPE_thisid, "low_trials", sep = "")]],
-                            n.seen.hi = input[[paste(single_GSPE_thisid, "high_trials", sep = "")]]-input[[paste(single_GSPE_thisid, "high_missed", sep = "")]],
-                            n.seen.lo = input[[paste(single_GSPE_thisid, "low_trials", sep = "")]]-input[[paste(single_GSPE_thisid, "low_missed", sep = "")]]))
+                            n.trials.hi = input[[paste(thisid, "high_trials", sep = "")]],
+                            n.trials.lo = input[[paste(thisid, "low_trials", sep = "")]],
+                            n.seen.hi = input[[paste(thisid, "high_trials", sep = "")]]-input[[paste(thisid, "high_missed", sep = "")]],
+                            n.seen.lo = input[[paste(thisid, "low_trials", sep = "")]]-input[[paste(thisid, "low_missed", sep = "")]]))
 
       scf <- ldply(scf, data.frame)
       SCF<-as.data.frame(table_data[["total_abundance"]])
@@ -536,7 +516,7 @@ observeEvent(input$tbl_rows_selected,{
       }
       else{
         SCF<-as.data.frame(table_data[["total_abundance"]])[,c("Area", "Total.Est", "High.Est", "Low.Est")]
-        SCF[,c("Total.Est", "High.Est", "Low.Est")]<-round(SCF[,c("Total.Est", "High.Est", "Low.Est")]*input[[paste(single_GSPE_thisid, "sightability_constant", sep = "")]])
+        SCF[,c("Total.Est", "High.Est", "Low.Est")]<-round(SCF[,c("Total.Est", "High.Est", "Low.Est")]*input[[paste(thisid, "sightability_constant", sep = "")]])
         SCF
       }
     }, options = list(dom = 't'),rownames = FALSE)
@@ -545,20 +525,20 @@ observeEvent(input$tbl_rows_selected,{
 
     incProgress(0.25, detail = "computing bull:cow ratios")
 
-    insertUI(selector = paste("#",single_GSPE_thisid, 2, sep = ""), where = "beforeEnd",
-             ui = DT::dataTableOutput(paste(single_GSPE_thisid, "GSPE_table_bullcow", sep = "")) %>% withSpinner(color="#0dc5c1"))
+    insertUI(selector = paste("#",thisid, 2, sep = ""), where = "beforeEnd",
+             ui = DT::dataTableOutput(paste(thisid, "GSPE_table_bullcow", sep = "")) %>% withSpinner(color="#0dc5c1"))
 
-    output[[paste(single_GSPE_thisid, "GSPE_table_bullcow", sep = "")]]<-DT::renderDataTable({
+    output[[paste(thisid, "GSPE_table_bullcow", sep = "")]]<-DT::renderDataTable({
       table_data$bullcow}, options = list(dom = 't'),rownames = FALSE)
 
     # Calf:Cow table output
 
     incProgress(0.25, detail = "computing calf:cow ratios")
 
-    insertUI(selector = paste("#",single_GSPE_thisid, 3, sep = ""), where = "beforeEnd",
-             ui = DT::dataTableOutput(paste(single_GSPE_thisid, "GSPE_table_calfcow", sep = "")) %>% withSpinner(color="#0dc5c1"))
+    insertUI(selector = paste("#",thisid, 3, sep = ""), where = "beforeEnd",
+             ui = DT::dataTableOutput(paste(thisid, "GSPE_table_calfcow", sep = "")) %>% withSpinner(color="#0dc5c1"))
 
-    output[[paste(single_GSPE_thisid, "GSPE_table_calfcow", sep = "")]]<-DT::renderDataTable({
+    output[[paste(thisid, "GSPE_table_calfcow", sep = "")]]<-DT::renderDataTable({
       table_data$calfcow}, options = list(dom = 't', selection = "none"),rownames = FALSE)
 
 
@@ -570,13 +550,13 @@ observeEvent(input$tbl_rows_selected,{
     })
 
 
-observeEvent(input[[paste(single_GSPE_idcount(), "maps", sep = "")]],{
+observeEvent(input[[paste(idcount(), "maps", sep = "")]],{
 
-  single_GSPE_thisid <- single_GSPE_idcount()
-  single_GSPE_idcount(single_GSPE_thisid)
-  single_GSPE_thisid <- paste0("GSPE", single_GSPE_thisid)
+  thisid <- idcount()
+  idcount(thisid)
+  thisid <- paste0("GSPE", thisid)
 
-  table_data<-values[[paste(single_GSPE_thisid, "table_data", sep = "")]]
+  table_data<-values[[paste(thisid, "table_data", sep = "")]]
   # If we want a different map (This takes some time, depending on the zoom)
   # Google map API key workaround
   height <- max(table_data$moose.dat$centrlat) - min(table_data$moose.dat$centrlat)
@@ -587,10 +567,10 @@ observeEvent(input[[paste(single_GSPE_idcount(), "maps", sep = "")]],{
                right   = max(table_data$moose.dat$centrlon) + 0.1 * width)
 
 
-  insertUI(selector = paste("#",single_GSPE_thisid, 4, sep = ""), where = "beforeEnd",
-           ui = plotOutput(paste(single_GSPE_thisid, "GSPE_plot", sep = ""))%>% withSpinner(color="#0dc5c1") )
+  insertUI(selector = paste("#",thisid, 4, sep = ""), where = "beforeEnd",
+           ui = plotOutput(paste(thisid, "GSPE_plot", sep = ""))%>% withSpinner(color="#0dc5c1") )
 
-  output[[paste(single_GSPE_thisid, "GSPE_plot", sep = "")]] <- renderPlot({
+  output[[paste(thisid, "GSPE_plot", sep = "")]] <- renderPlot({
     # Abundance heat map
 
 
@@ -598,42 +578,42 @@ observeEvent(input[[paste(single_GSPE_idcount(), "maps", sep = "")]],{
     A <- get_stamenmap(borders, zoom = 3, maptype = "terrain")
 
 
-    plot_data_filter<-case_when(input[[paste(single_GSPE_thisid, "metric", sep = "")]] == "totalmoose" ~ "total_results",
-                                input[[paste(single_GSPE_thisid, "metric", sep = "")]] == "TotalBulls" ~ "bull_results",
-                                input[[paste(single_GSPE_thisid, "metric", sep = "")]] == "TotalCows" ~ "cow_results",
-                                input[[paste(single_GSPE_thisid, "metric", sep = "")]] == "TotalCalves" ~ "calf_results",
-                                input[[paste(single_GSPE_thisid, "metric", sep = "")]] == "strat_map" ~ "total_results",
-                                input[[paste(single_GSPE_thisid, "metric", sep = "")]] == "strat_map_w_counts" ~ "total_results")
+    plot_data_filter<-case_when(input[[paste(thisid, "metric", sep = "")]] == "totalmoose" ~ "total_results",
+                                input[[paste(thisid, "metric", sep = "")]] == "TotalBulls" ~ "bull_results",
+                                input[[paste(thisid, "metric", sep = "")]] == "TotalCows" ~ "cow_results",
+                                input[[paste(thisid, "metric", sep = "")]] == "TotalCalves" ~ "calf_results",
+                                input[[paste(thisid, "metric", sep = "")]] == "strat_map" ~ "total_results",
+                                input[[paste(thisid, "metric", sep = "")]] == "strat_map_w_counts" ~ "total_results")
 
     plot_data<- cbind(table_data$moose.dat,
                       table_data[[plot_data_filter]][[1]]$predictions[,4:5])
 
 
-    plot_fill_metric<-case_when(input[[paste(single_GSPE_thisid, "metric", sep = "")]] == "totalmoose" ~ "log(Est+1)",
-                           input[[paste(single_GSPE_thisid, "metric", sep = "")]] == "TotalBulls" ~ "log(Est+1)",
-                           input[[paste(single_GSPE_thisid, "metric", sep = "")]] == "TotalCows" ~ "log(Est+1)",
-                           input[[paste(single_GSPE_thisid, "metric", sep = "")]] == "TotalCalves" ~ "log(Est+1)",
-                           input[[paste(single_GSPE_thisid, "metric", sep = "")]] == "strat_map" ~ "Stratname",
-                           input[[paste(single_GSPE_thisid, "metric", sep = "")]] == "strat_map_w_counts" ~ "Stratname")
+    plot_fill_metric<-case_when(input[[paste(thisid, "metric", sep = "")]] == "totalmoose" ~ "log(Est+1)",
+                           input[[paste(thisid, "metric", sep = "")]] == "TotalBulls" ~ "log(Est+1)",
+                           input[[paste(thisid, "metric", sep = "")]] == "TotalCows" ~ "log(Est+1)",
+                           input[[paste(thisid, "metric", sep = "")]] == "TotalCalves" ~ "log(Est+1)",
+                           input[[paste(thisid, "metric", sep = "")]] == "strat_map" ~ "Stratname",
+                           input[[paste(thisid, "metric", sep = "")]] == "strat_map_w_counts" ~ "Stratname")
 
-    plot_unit_label_metric<-case_when(input[[paste(single_GSPE_thisid, "metric", sep = "")]] == "totalmoose" ~ "totalmoose",
-                                input[[paste(single_GSPE_thisid, "metric", sep = "")]] == "TotalBulls" ~ "TotalBulls",
-                                input[[paste(single_GSPE_thisid, "metric", sep = "")]] == "TotalCows" ~ "TotalCows",
-                                input[[paste(single_GSPE_thisid, "metric", sep = "")]] == "TotalCalves" ~ "TotalCalves",
-                                input[[paste(single_GSPE_thisid, "metric", sep = "")]] == "strat_map" ~ "NA",
-                                input[[paste(single_GSPE_thisid, "metric", sep = "")]] == "strat_map_w_counts" ~ "totalmoose")
-
-
-
-
-    metric_label<-case_when(input[[paste(single_GSPE_thisid, "metric", sep = "")]] == "totalmoose" ~ "Total",
-                            input[[paste(single_GSPE_thisid, "metric", sep = "")]] == "TotalBulls" ~ "Bull",
-                            input[[paste(single_GSPE_thisid, "metric", sep = "")]] == "TotalCows" ~ "Cow",
-                            input[[paste(single_GSPE_thisid, "metric", sep = "")]] == "TotalCalves" ~ "Calf")
+    plot_unit_label_metric<-case_when(input[[paste(thisid, "metric", sep = "")]] == "totalmoose" ~ "totalmoose",
+                                input[[paste(thisid, "metric", sep = "")]] == "TotalBulls" ~ "TotalBulls",
+                                input[[paste(thisid, "metric", sep = "")]] == "TotalCows" ~ "TotalCows",
+                                input[[paste(thisid, "metric", sep = "")]] == "TotalCalves" ~ "TotalCalves",
+                                input[[paste(thisid, "metric", sep = "")]] == "strat_map" ~ "NA",
+                                input[[paste(thisid, "metric", sep = "")]] == "strat_map_w_counts" ~ "totalmoose")
 
 
 
-    if(is.element(input[[paste(single_GSPE_thisid, "metric", sep = "")]], c("totalmoose","TotalBulls","TotalCows","TotalCalves"))){
+
+    metric_label<-case_when(input[[paste(thisid, "metric", sep = "")]] == "totalmoose" ~ "Total",
+                            input[[paste(thisid, "metric", sep = "")]] == "TotalBulls" ~ "Bull",
+                            input[[paste(thisid, "metric", sep = "")]] == "TotalCows" ~ "Cow",
+                            input[[paste(thisid, "metric", sep = "")]] == "TotalCalves" ~ "Calf")
+
+
+
+    if(is.element(input[[paste(thisid, "metric", sep = "")]], c("totalmoose","TotalBulls","TotalCows","TotalCalves"))){
       scale_fill <- scale_fill_gradient(breaks = log(c(0, 5, 15, 30, 60, 120, 200)+1),
                                         labels = c(0, 5, 15, 30, 60, 120, 200))
       }
@@ -644,18 +624,18 @@ observeEvent(input[[paste(single_GSPE_idcount(), "maps", sep = "")]],{
 
     pred_plot<-ggmap(A)+geom_tile(data = plot_data, aes_string(x="centrlon",y="centrlat",fill= plot_fill_metric),alpha= 1,colour="black")+
       geom_text(data=subset(plot_data, Counted== TRUE),aes_string(x="centrlon",y="centrlat",label= plot_unit_label_metric), color = "white", size = 5)+
-      ggtitle(paste(plot_data$SurveyName),subtitle = paste(plot_data$Surveyyear, plot_data$Season, case_when(input[[paste(single_GSPE_thisid, "metric", sep = "")]] == "totalmoose" ~ paste("Predicted", metric_label,"Moose Abundance"),
-                                                                                                             input[[paste(single_GSPE_thisid, "metric", sep = "")]] == "TotalBulls" ~ paste("Predicted", metric_label,"Moose Abundance"),
-                                                                                                             input[[paste(single_GSPE_thisid, "metric", sep = "")]] == "TotalCows" ~ paste("Predicted", metric_label,"Moose Abundance"),
-                                                                                                             input[[paste(single_GSPE_thisid, "metric", sep = "")]] == "TotalCalves" ~ paste("Predicted", metric_label,"Moose Abundance"),
-                                                                                                             input[[paste(single_GSPE_thisid, "metric", sep = "")]] == "strat_map" ~ "Stratification",
-                                                                                                             input[[paste(single_GSPE_thisid, "metric", sep = "")]] == "strat_map_w_counts" ~ "Stratification and Total Moose Counts")))+
-      labs(x = "", y = "", fill = case_when(input[[paste(single_GSPE_thisid, "metric", sep = "")]] == "totalmoose" ~ "Moose",
-                                            input[[paste(single_GSPE_thisid, "metric", sep = "")]] == "TotalBulls" ~ "Moose",
-                                            input[[paste(single_GSPE_thisid, "metric", sep = "")]] == "TotalCows" ~ "Moose",
-                                            input[[paste(single_GSPE_thisid, "metric", sep = "")]] == "TotalCalves" ~ "Moose",
-                                            input[[paste(single_GSPE_thisid, "metric", sep = "")]] == "strat_map" ~ "Strat",
-                                            input[[paste(single_GSPE_thisid, "metric", sep = "")]] == "strat_map_w_counts" ~ "Strat"))+
+      ggtitle(paste(plot_data$SurveyName),subtitle = paste(plot_data$Surveyyear, plot_data$Season, case_when(input[[paste(thisid, "metric", sep = "")]] == "totalmoose" ~ paste("Predicted", metric_label,"Moose Abundance"),
+                                                                                                             input[[paste(thisid, "metric", sep = "")]] == "TotalBulls" ~ paste("Predicted", metric_label,"Moose Abundance"),
+                                                                                                             input[[paste(thisid, "metric", sep = "")]] == "TotalCows" ~ paste("Predicted", metric_label,"Moose Abundance"),
+                                                                                                             input[[paste(thisid, "metric", sep = "")]] == "TotalCalves" ~ paste("Predicted", metric_label,"Moose Abundance"),
+                                                                                                             input[[paste(thisid, "metric", sep = "")]] == "strat_map" ~ "Stratification",
+                                                                                                             input[[paste(thisid, "metric", sep = "")]] == "strat_map_w_counts" ~ "Stratification and Total Moose Counts")))+
+      labs(x = "", y = "", fill = case_when(input[[paste(thisid, "metric", sep = "")]] == "totalmoose" ~ "Moose",
+                                            input[[paste(thisid, "metric", sep = "")]] == "TotalBulls" ~ "Moose",
+                                            input[[paste(thisid, "metric", sep = "")]] == "TotalCows" ~ "Moose",
+                                            input[[paste(thisid, "metric", sep = "")]] == "TotalCalves" ~ "Moose",
+                                            input[[paste(thisid, "metric", sep = "")]] == "strat_map" ~ "Strat",
+                                            input[[paste(thisid, "metric", sep = "")]] == "strat_map_w_counts" ~ "Strat"))+
       scale_fill+
       theme(plot.title = element_text(family = "Trebuchet MS", color="#666666", face="bold", size=22, hjust=0),
             plot.subtitle  = element_text(family = "Trebuchet MS", color="#666666", face="bold", size=18, hjust=0),
@@ -673,8 +653,6 @@ observeEvent(input[[paste(single_GSPE_idcount(), "maps", sep = "")]],{
 
 
 })
-
-
     ############################
     # Trend Analysis
     ############################
@@ -691,16 +669,39 @@ observeEvent(input[[paste(single_GSPE_idcount(), "maps", sep = "")]],{
 
     appendTab("abundance_tabs",
     tabPanel(
-      value = paste(values$authorized_surveys[input$tbl_rows_selected,"surveyname"], " ", values$authorized_surveys[input$tbl_rows_selected,"surveyyear"], "Trend analysis"),
+      value = paste(values$authorized_surveys[input$tbl_rows_selected,"surveyname"], " ", values$authorized_surveys[input$tbl_rows_selected,"surveyyear"], "Trend analysis",trend_idcount()),
       title = tab_title(paste(values$authorized_surveys[input$tbl_rows_selected,"surveyname"], " ", values$authorized_surveys[input$tbl_rows_selected,"surveyyear"], "Trend analysis")),
-      box(width = 12,
-          title = "Trend Analysis",
-          status = "primary",
-          solidHeader = TRUE,
-          DT::dataTableOutput(paste(trend_thisid, "trend_data_selection_table", sep = ""))%>% withSpinner(color="#0dc5c1"),
-          actionButton(paste(trend_thisid, "remove_from_trend", sep = ""), "Remove from trend ") ,
-          plotOutput(paste(trend_thisid, "matching_abundance_plot", sep = ""))
-          )), select=TRUE)
+      h4(strong("Trend Analysis")),
+      uiOutput(paste(trend_thisid, "trend_plot_metric", sep = "")),
+      plotOutput(paste(trend_thisid, "matching_abundance_plot", sep = "")),
+      plotOutput(paste(trend_thisid, "matching_composition_plot", sep = "")),
+      h5("Composition"),
+      fluidRow(
+      column(width = 9,
+             fluidRow(
+               column(10,
+                      h5("Trend Data")),
+               column(2,
+                      div(id = paste(trend_thisid, "remove_from_trend", sep = ""),
+                          uiOutput(paste(trend_thisid, "remove_from_trend", sep = ""))))),
+             DT::dataTableOutput(paste(trend_thisid, "trend_data_selection_table", sep = ""))%>% withSpinner(color="#0dc5c1")) ,
+      column(width = 3,
+             fluidRow(
+               column(7,
+                      h5("Removed Data")),
+               column(5,
+                      div(id = paste(trend_thisid, "add_to_trend", sep = ""),
+                          uiOutput(paste(trend_thisid, "add_to_trend", sep = ""))))),
+             DT::dataTableOutput(paste(trend_thisid, "trend_removed_data_selection_table", sep = ""))%>% withSpinner(color="#0dc5c1"))),
+      br(),
+      p(paste("Shown are all surveys that fully contain the area in the", values$authorized_surveys[input$tbl_rows_selected,'surveyname'], " ", values$authorized_surveys[input$tbl_rows_selected,'surveyyear'], "survey or analysis area (if entered).
+        The abundance estimates shown are for that specific area only, even if that area was surveyed as a part of a larger survey.
+        In other words, these are apples-to-apples abundance comparisons of the searched area.")),
+      br(),
+      p("Some surveys entered into the database may be experimental or redundant.
+      Efforts should be made by the survey owners to delete these redundant data from the survey database, but selecting the survey from the table and clicking 'Remove from trend' will ignore the selected survey from consideration in this analysis.
+        This does not delete the survey from the database.")
+          ), select=TRUE)
 
 
 
@@ -712,55 +713,71 @@ observeEvent(input[[paste(single_GSPE_idcount(), "maps", sep = "")]],{
       l<-length(unit_IDs)
 
 
-      # Find surveys that at least PARTIALLY include area of interest
-      incProgress(0.1, detail = "Finding matching surveys")
+#       # Find surveys that at least PARTIALLY include area of interest
+#       incProgress(0.1, detail = "Finding matching surveys")
+#
+#       partial <-
+#         tbl(values$moose, "v_wc_moosepop_reprospreadsheet") %>%
+#         filter(UnitID %in% unit_IDs) %>%
+#         collect() %>%
+#         dplyr::select(SurveyID)
+#
+#       survey_IDs_partial<- unique(partial$SurveyID)
+#
+#       # Get all survey data from the partial matches
+#       incProgress(0.05, detail = "Finding matching surveys")
+#
+#       partial_match_data <- dbGetQuery(values$moose,
+#                                        paste("exec spr_wc_moosepop_reprospreadsheet @SurveyIDList = '",
+#                                              paste(as.character(survey_IDs_partial), sep="' '", collapse=", "),
+#                                          "'", sep = ""))
+#
+#       # Identify only the surveys that include the entire AA
+#       incProgress(0.05, detail = "Filtering to only matched area")
+#
+#       partial_match_data<-
+#         partial_match_data %>%
+#         filter(UnitID %in% unit_IDs) %>%
+#         group_by(SurveyID, SurveyName, Surveyyear) %>%
+#         dplyr::summarise(n = n()) %>%
+#         ungroup() %>%
+#         dplyr::filter(n == l)
+#
+#       # Get the survey data for the surveys that include the entire AA
+#       incProgress(0.1, detail = "Fetching abundance estimates. This may take a while!")
+#
+#       exact_match_data <- dbGetQuery(values$moose,
+#                                      paste("exec spr_wc_moosepop_reprospreadsheet @SurveyIDList = '",
+#                                            paste(as.character(partial_match_data$SurveyID), sep="' '", collapse=", "),
+#                                        "'", sep = ""))
+#
+#       exact_match_data$AA<-0
+#       exact_match_data[is.element(exact_match_data$UnitID, unit_IDs),"AA"]<-1
+#
+#       # Create a function that will run and can be mapped even if there's an error in a survey
+#       flexible_AA_tables<-possibly(AA_tables, otherwise = NULL)
+#
+#       # Run all of the estimates
+#       out.all <- dlply(exact_match_data, .(SurveyID),.fun=function(x)flexible_AA_tables(x, column_names = "AA"))
+#
 
-      partial <-
-        tbl(values$moose, "v_wc_moosepop_reprospreadsheet") %>%
-        filter(UnitID %in% unit_IDs) %>%
-        collect() %>%
-        dplyr::select(SurveyID)
 
-      survey_IDs_partial<- unique(partial$SurveyID)
+load("../../data/All20A2008matches_test.RData")
 
-      # Get all survey data from the partial matches
-      incProgress(0.05, detail = "Finding matching surveys")
 
-      partial_match_data <- dbGetQuery(values$moose,
-                                       paste("exec spr_wc_moosepop_reprospreadsheet @SurveyIDList = '",
-                                             paste(as.character(survey_IDs_partial), sep="' '", collapse=", "),
-                                         "'", sep = ""))
-
-      # Identify only the surveys that include the entire AA
-      incProgress(0.05, detail = "Filtering to only matched area")
-
-      partial_match_data<-
-        partial_match_data %>%
-        filter(UnitID %in% unit_IDs) %>%
-        group_by(SurveyID, SurveyName, Surveyyear) %>%
-        dplyr::summarise(n = n()) %>%
-        ungroup() %>%
-        dplyr::filter(n == l)
-
-      # Get the survey data for the surveys that include the entire AA
-      incProgress(0.1, detail = "Fetching abundance estimates. This may take a while!")
-
-      exact_match_data <- dbGetQuery(values$moose,
-                                     paste("exec spr_wc_moosepop_reprospreadsheet @SurveyIDList = '",
-                                           paste(as.character(partial_match_data$SurveyID), sep="' '", collapse=", "),
-                                       "'", sep = ""))
-
-      exact_match_data$AA<-0
-      exact_match_data[is.element(exact_match_data$UnitID, unit_IDs),"AA"]<-1
-
-      # Create a function that will run and can be mapped even if there's an error in a survey
-      flexible_AA_tables<-possibly(AA_tables, otherwise = NULL)
-
-      # Run all of the estimates
-      out.all <- dlply(exact_match_data, .(SurveyID),.fun=function(x)flexible_AA_tables(x, column_names = "AA"))
+# case_when(input[[paste(trend_thisid, "abundance_metric", sep = "")]] == "Total" ~ "total_results",
+#           input[[paste(trend_thisid, "abundance_metric", sep = "")]] == "Bulls" ~ "bull_results",
+#           input[[paste(trend_thisid, "abundance_metric", sep = "")]] == "TotalCows" ~ "cow_results",
+#           input[[paste(trend_thisid, "abundance_metric", sep = "")]] == "TotalCalves" ~ "calf_results",
 
       # Extract just the total abundance estimate
-      trend_data<-map_df(out.all,  1)
+      trend_data<-rbind(
+        map_df(out.all,  1) %>% mutate(metric = "Total"),
+        map_df(out.all,  2) %>% mutate(metric = "Bulls"),
+        map_df(out.all,  3) %>% mutate(metric = "Cows"),
+        map_df(out.all,  4) %>% mutate(metric = "Calves"))
+
+
 
       trend_data$SurveyID<-rep(as.integer(names(out.all[!sapply( out.all, function(x) length(x) == 0 )])), each = 2)
       trend_data<-left_join(trend_data, partial_match_data) %>% filter(Area == "AA")
@@ -777,7 +794,15 @@ observeEvent(input[[paste(single_GSPE_idcount(), "maps", sep = "")]],{
 
 
       values[[paste(trend_thisid, "trend_data", sep = "")]]<-trend_data %>%
-        arrange(Surveyyear)
+        arrange(Surveyyear) %>%
+        filter(metric == "Total")
+
+
+
+      values[[paste(trend_thisid, "removed_trend_data", sep = "")]]<-
+        data.frame(matrix(ncol=length(colnames(values[[paste(trend_thisid, "trend_data", sep = "")]])),
+                          nrow=0,
+                          dimnames=list(NULL, colnames(values[[paste(trend_thisid, "trend_data", sep = "")]]))))
 
 
     output[[paste(trend_thisid, "trend_data_selection_table", sep = "")]]<-DT::renderDataTable(server = FALSE,{
@@ -791,11 +816,10 @@ observeEvent(input[[paste(single_GSPE_idcount(), "maps", sep = "")]],{
                                                                          "Low.SE",
                                                                          "Tot.RP@90",
                                                                          "High.RP@90",
-                                                                         "Low.RP@90")] %>%
-                  arrange(Surveyyear),
+                                                                         "Low.RP@90")] ,
                 extensions = 'Buttons',
-                selection = 'single',
-                options = list(dom = "Blfrtip",
+                selection = 'multiple',
+                options = list(dom = "tlfripB",
                                iDisplayLength = 10,
                                scrollX = TRUE,
                                buttons = list("copy",
@@ -806,20 +830,102 @@ observeEvent(input[[paste(single_GSPE_idcount(), "maps", sep = "")]],{
                 rownames = FALSE)
     })
 
+    output[[paste(trend_thisid, "trend_removed_data_selection_table", sep = "")]]<-DT::renderDataTable(server = FALSE,{
+      datatable(values[[paste(trend_thisid, "removed_trend_data", sep = "")]][,c("SurveyName",
+                                                                                  "Surveyyear")]  ,
+                extensions = 'Buttons',
+                selection = 'multiple',
+                options = list(dom = "tlfrip"),
+                rownames = FALSE)
+    })
+
+
+
+    output[[paste(trend_thisid, "add_to_trend", sep = "")]]<-renderUI({
+      req(input[[paste(trend_thisid, "trend_removed_data_selection_table_rows_selected", sep = "")]])
+      actionButton(paste(trend_thisid, "add_to_trend", sep = ""), "Add back to trend ")
+    })
+
+    output[[paste(trend_thisid, "remove_from_trend", sep = "")]]<-renderUI({
+      req(input[[paste(trend_thisid, "trend_data_selection_table_rows_selected", sep = "")]])
+      actionButton(paste(trend_thisid, "remove_from_trend", sep = ""), "Remove from trend ")
+    })
+
+
+    observeEvent(input[[paste(trend_thisid, "trend_removed_data_selection_table_rows_selected", sep = "")]],{
+      toggle(paste(trend_thisid, "add_to_trend", sep = ""), condition = is.numeric(input[[paste(trend_thisid, "trend_removed_data_selection_table_rows_selected", sep = "")]]))
+    })
+
     observeEvent(input[[paste(trend_thisid, "remove_from_trend", sep = "")]],{
 
       if (!is.null(input[[paste(trend_thisid, "trend_data_selection_table_rows_selected", sep = "")]])) {
 
-        values[[paste(trend_thisid, "trend_data", sep = "")]] <- values[[paste(trend_thisid, "trend_data", sep = "")]][-as.numeric(input[[paste(trend_thisid, "trend_data_selection_table_rows_selected", sep = "")]]),]
+        values[[paste(trend_thisid, "removed_trend_data", sep = "")]] <-
+          rbind(values[[paste(trend_thisid, "removed_trend_data", sep = "")]],
+                values[[paste(trend_thisid, "trend_data", sep = "")]][as.numeric(input[[paste(trend_thisid, "trend_data_selection_table_rows_selected", sep = "")]]),])
+
+        values[[paste(trend_thisid, "trend_data", sep = "")]] <-
+          values[[paste(trend_thisid, "trend_data", sep = "")]][-as.numeric(input[[paste(trend_thisid, "trend_data_selection_table_rows_selected", sep = "")]]),] %>%
+          group_by(Surveyyear) %>%
+          dplyr::mutate(redundant_name = SurveyName,
+                        redundant = length(Surveyyear))
+
+
       }
     })
 
-    output[[paste(trend_thisid, "matching_abundance_plot", sep = "")]]<- renderPlot({
 
-      data<-values[[paste(trend_thisid, "trend_data", sep = "")]] %>% filter(!is.na(Total.Est))
+    observeEvent(input[[paste(trend_thisid, "add_to_trend", sep = "")]],{
+
+      if (!is.null(input[[paste(trend_thisid, "trend_removed_data_selection_table_rows_selected", sep = "")]])) {
+
+        values[[paste(trend_thisid, "removed_trend_data", sep = "")]] <-
+          values[[paste(trend_thisid, "removed_trend_data", sep = "")]][-as.numeric(input[[paste(trend_thisid, "trend_removed_data_selection_table_rows_selected", sep = "")]]),]
+
+
+        values[[paste(trend_thisid, "trend_data", sep = "")]] <-
+          rbind(values[[paste(trend_thisid, "trend_data", sep = "")]],
+          values[[paste(trend_thisid, "removed_trend_data", sep = "")]][as.numeric(input[[paste(trend_thisid, "trend_removed_data_selection_table_rows_selected", sep = "")]]),]) %>%
+          group_by(Surveyyear) %>%
+          dplyr::mutate(redundant_name = SurveyName,
+                        redundant = length(Surveyyear))
+      }
+    })
+
+    output[[paste(trend_thisid, "trend_plot_metric", sep = "")]]<-renderUI({
+      if(sum(na.omit(values[[paste(trend_thisid, "trend_data", sep = "")]]$redundant)) == length(na.omit(values[[paste(trend_thisid, "trend_data", sep = "")]]$redundant))){
+        h5("Abundance")
+      checkboxGroupInput(paste(trend_thisid, "trend_plot_metric", sep = ""), "",choices = c("Total", "Bulls", "Cows", "Calves"), selected = "Total")
+      }else{
+        h6("There exist redundant/misleading surveys in the database. Select unwanted/duplicate surveys in the table below to remove them from the analysis. Efforts should be made to delete these surveys from the database.")
+      }
+
+    })
+
+
+    output[[paste(trend_thisid, "matching_abundance_plot", sep = "")]]<- renderPlot({
+        if(!is.null(input[[paste(trend_thisid, "trend_plot_metric", sep = "")]])){
+          values[[paste(trend_thisid, "trend_abundance_plot_data", sep = "")]]<-trend_data %>%
+            arrange(Surveyyear) %>%
+            filter(is.element(metric, input[[paste(trend_thisid, "trend_plot_metric", sep = "")]])) %>%
+            filter(SurveyName %in% unique(as.data.frame(values[[paste(trend_thisid, "trend_data", sep = "")]])[,"SurveyName"])) %>%
+            filter(is.element(Surveyyear, as.data.frame(values[[paste(trend_thisid, "trend_data", sep = "")]])[,"Surveyyear"]))
+        }else{
+          values[[paste(trend_thisid, "trend_abundance_plot_data", sep = "")]]<-values[[paste(trend_thisid, "trend_data", sep = "")]]
+
+
+        }
+
+
+data<-values[[paste(trend_thisid, "trend_abundance_plot_data", sep = "")]] %>%
+        filter(!is.na(Total.Est)) %>%
+        group_by(Surveyyear, metric) %>%
+        dplyr::mutate(redundant_name = SurveyName,
+                      redundant = length(Surveyyear))
+
       labels<-as.character(seq(min(data$Surveyyear), max(data$Surveyyear), by = 1))
 
-      labels[(seq(min(data$Surveyyear), max(data$Surveyyear), by = 1)%%2 == 1)]<-''
+      # labels[(seq(min(data$Surveyyear), max(data$Surveyyear), by = 1)%%2 == 1)]<-''
 
 
       myColors <- c(brewer.pal(length(unique(data$redundant_name)),"Set1"))
@@ -827,12 +933,19 @@ observeEvent(input[[paste(single_GSPE_idcount(), "maps", sep = "")]],{
       colScale <- scale_colour_manual(name = names(myColors),values = myColors)
 
 
-      if(sum(na.omit(values[[paste(trend_thisid, "trend_data", sep = "")]]$redundant)) == length(na.omit(values[[paste(trend_thisid, "trend_data", sep = "")]]$redundant))){
+      if(sum(na.omit(data$redundant)) != length(na.omit(data$redundant))){
+        colScale <- scale_color_manual(name = names(myColors),values = myColors)
+        colvar<-"as.factor(redundant_name)"
+        y_label<-"Moose"
+
+      }else if( length(input[[paste(trend_thisid, "trend_plot_metric", sep = "")]]) > 1 ){
+        colScale <- scale_color_manual(values = c("Total" = "Black", "Cows" = "Pink","Bulls" = "Blue","Calves" = "Green"))
+        colvar<-"metric"
+        y_label<-"Moose"
+      }else{
         colScale <- NULL
         colvar<- NULL
-      }else{
-        colScale <- scale_colour_manual(name = names(myColors),values = myColors)
-        colvar<-"redundant_name"
+        y_label<-input[[paste(trend_thisid, "trend_plot_metric", sep = "")]]
       }
 
       ggplot(data, aes_string(x = "Surveyyear",
@@ -840,14 +953,15 @@ observeEvent(input[[paste(single_GSPE_idcount(), "maps", sep = "")]],{
         geom_point(aes( y = Total.Est),
                    position = position_dodge(width = .5))+
         geom_errorbar(aes(ymin = Total.Est - Total.SE, ymax = Total.Est + Total.SE),
-                      position = position_dodge(width = .5))+
+                      position = position_dodge(width = .5),
+                      width = 6/length(labels))+
         scale_y_continuous(limits = c(0,max(data$Total.Est) + max(data$Total.SE)),
                            breaks = seq(0, max(data$Total.Est) + max(data$Total.SE), by = 1000))+
-        scale_x_continuous(limits=c(min(data$Surveyyear)-1,max(data$Surveyyear)+1),
+        scale_x_continuous(limits=c(min(data$Surveyyear)-.5,max(data$Surveyyear)+.5),
                            breaks=seq(min(data$Surveyyear), max(data$Surveyyear), by = 1),
                            labels = labels)+
         colScale+
-        labs(y = "Moose", x = "", color  = "Survey Name")+
+        labs(y = paste(y_label), x = "", color  = "")+
         ggtitle(paste("All matches for" ,values[[paste(trend_thisid, "moose_dat", sep = "")]]$SurveyName[1], values[[paste(trend_thisid, "moose_dat", sep = "")]]$Surveyyear[1], "survey area"))+
         theme(plot.title = element_text(family = "Trebuchet MS", color="#666666", face="bold", size=22, hjust=0),
               plot.subtitle  = element_text(family = "Trebuchet MS", color="#666666", face="bold", size=18, hjust=0),
@@ -855,12 +969,84 @@ observeEvent(input[[paste(single_GSPE_idcount(), "maps", sep = "")]],{
               axis.text = element_text(family = "Trebuchet MS", color="#666666", face="bold", size=12),
               axis.text.x = element_text(angle = 45, hjust = 1),
               legend.position = "right",
-              legend.title = element_text(family = "Trebuchet MS", color="#666666", face="bold", size=5),
-              legend.text = element_text(family = "Trebuchet MS", color="#666666", face="bold", size=5),
-              legend.key.size = unit(1, "cm"),
+              legend.title = element_blank(),
+              legend.text = element_text(family = "Trebuchet MS", color="#666666", face="bold", size=10),
+              legend.key.size = unit(1.5, "cm"),
               panel.background = element_rect(fill = "white", colour = "#666666"),
               panel.grid.major = element_line(size = 0.0005, linetype = 'solid', colour = "grey"))
     })
+
+    output[[paste(trend_thisid, "matching_composition_plot", sep = "")]]<- renderPlot({
+      req(sum(na.omit(values[[paste(trend_thisid, "trend_data", sep = "")]]$redundant)) == length(na.omit(values[[paste(trend_thisid, "trend_data", sep = "")]]$redundant)))
+      if(!is.null(input[[paste(trend_thisid, "trend_plot_metric", sep = "")]])){
+        values[[paste(trend_thisid, "trend_composition_plot_data", sep = "")]]<-trend_data %>%
+          arrange(Surveyyear) %>%
+          filter(is.element(metric, input[[paste(trend_thisid, "trend_plot_metric", sep = "")]])) %>%
+          filter(SurveyName %in% unique(as.data.frame(values[[paste(trend_thisid, "trend_data", sep = "")]])[,"SurveyName"])) %>%
+          filter(is.element(Surveyyear, as.data.frame(values[[paste(trend_thisid, "trend_data", sep = "")]])[,"Surveyyear"]))
+      }else{
+        values[[paste(trend_thisid, "trend_composition_plot_data", sep = "")]]<-values[[paste(trend_thisid, "trend_data", sep = "")]]
+
+
+      }
+
+
+      data<-values[[paste(trend_thisid, "trend_composition_plot_data", sep = "")]] %>%
+
+
+      labels<-as.character(seq(min(data$Surveyyear), max(data$Surveyyear), by = 1))
+
+      # labels[(seq(min(data$Surveyyear), max(data$Surveyyear), by = 1)%%2 == 1)]<-''
+
+
+      myColors <- c(brewer.pal(length(unique(data$redundant_name)),"Set1"))
+      names(myColors) <- c(unique(data$redundant_name))
+      colScale <- scale_colour_manual(name = names(myColors),values = myColors)
+
+
+      if(sum(na.omit(data$redundant)) != length(na.omit(data$redundant))){
+        colScale <- scale_color_manual(name = names(myColors),values = myColors)
+        colvar<-"as.factor(redundant_name)"
+        y_label<-"Moose"
+
+      }else if( length(input[[paste(trend_thisid, "trend_plot_metric", sep = "")]]) > 1 ){
+        colScale <- scale_color_manual(values = c("Total" = "Black", "Cows" = "Pink","Bulls" = "Blue","Calves" = "Green"))
+        colvar<-"metric"
+        y_label<-"Moose"
+      }else{
+        colScale <- NULL
+        colvar<- NULL
+        y_label<-input[[paste(trend_thisid, "trend_plot_metric", sep = "")]]
+      }
+
+      ggplot(data, aes_string(x = "Surveyyear",
+                              color = colvar))+
+        geom_point(aes( y = Total.Est),
+                   position = position_dodge(width = .5))+
+        geom_errorbar(aes(ymin = Total.Est - Total.SE, ymax = Total.Est + Total.SE),
+                      position = position_dodge(width = .5),
+                      width = 6/length(labels))+
+        scale_y_continuous(limits = c(0,max(data$Total.Est) + max(data$Total.SE)),
+                           breaks = seq(0, max(data$Total.Est) + max(data$Total.SE), by = 1000))+
+        scale_x_continuous(limits=c(min(data$Surveyyear)-.5,max(data$Surveyyear)+.5),
+                           breaks=seq(min(data$Surveyyear), max(data$Surveyyear), by = 1),
+                           labels = labels)+
+        colScale+
+        labs(y = paste(y_label), x = "", color  = "")+
+        ggtitle(paste("All matches for" ,values[[paste(trend_thisid, "moose_dat", sep = "")]]$SurveyName[1], values[[paste(trend_thisid, "moose_dat", sep = "")]]$Surveyyear[1], "survey area"))+
+        theme(plot.title = element_text(family = "Trebuchet MS", color="#666666", face="bold", size=22, hjust=0),
+              plot.subtitle  = element_text(family = "Trebuchet MS", color="#666666", face="bold", size=18, hjust=0),
+              axis.title = element_text(family = "Trebuchet MS", color="#666666", face="bold", size=12),
+              axis.text = element_text(family = "Trebuchet MS", color="#666666", face="bold", size=12),
+              axis.text.x = element_text(angle = 45, hjust = 1),
+              legend.position = "right",
+              legend.title = element_blank(),
+              legend.text = element_text(family = "Trebuchet MS", color="#666666", face="bold", size=10),
+              legend.key.size = unit(1.5, "cm"),
+              panel.background = element_rect(fill = "white", colour = "#666666"),
+              panel.grid.major = element_line(size = 0.0005, linetype = 'solid', colour = "grey"))
+    })
+
     })
 
     })
