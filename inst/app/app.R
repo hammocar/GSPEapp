@@ -828,12 +828,19 @@ load("../../data/All20A2008matches_test.RData")
                                                                          "Low.RP@90")] ,
                 extensions = 'Buttons',
                 selection = 'multiple',
-                options = list(dom = "tlfripB",
+                autoHideNavigation = TRUE,
+                options = list(dom = "Btlip",
                                iDisplayLength = 10,
                                scrollX = TRUE,
-                               buttons = list("copy",
+                               buttons = list(list(extend = "copy", title = NULL),
                                               list(extend = "collection" ,
-                                                   buttons = c("csv", "excel", "pdf"),
+                                                   buttons = list(
+                                                     list(extend = "csv",filename = paste(values$authorized_surveys[input$tbl_rows_selected,"surveyname"],
+                                                                                                  "Trend analysis")),
+                                                     list(extend = "excel",filename = paste(values$authorized_surveys[input$tbl_rows_selected,"surveyname"],
+                                                                                        "Trend analysis")),
+                                                     list(extend = "pdf",filename = paste(values$authorized_surveys[input$tbl_rows_selected,"surveyname"],
+                                                                                        "Trend analysis"))),
                                                    text = "Download",
                                                    exportOptions = list(modifier = list(page = "all"))))),
                 rownames = FALSE)
@@ -844,7 +851,21 @@ load("../../data/All20A2008matches_test.RData")
                                                                                   "Surveyyear")]  ,
                 extensions = 'Buttons',
                 selection = 'multiple',
-                options = list(dom = "tlfrip"),
+                autoHideNavigation = TRUE,
+                options = list(dom = "Btlip",
+                               buttons = list(list(extend = "copy", title = NULL),
+                                              list(extend = "collection" ,
+                                                   buttons = list(
+                                                     list(extend = "csv",filename = paste(values$authorized_surveys[input$tbl_rows_selected,"surveyname"],
+                                                                                          "Potential Bad Surveys")),
+                                                     list(extend = "excel",filename = paste(values$authorized_surveys[input$tbl_rows_selected,"surveyname"],
+                                                                                            "Potential Bad Surveys")),
+                                                     list(extend = "pdf",filename = paste(values$authorized_surveys[input$tbl_rows_selected,"surveyname"],
+                                                                                          "Potential Bad Surveys"),
+                                                          title = paste(values$authorized_surveys[input$tbl_rows_selected,"surveyname"],
+                                                                        "Potential Bad Surveys"))),
+                                                   text = "Download",
+                                                   exportOptions = list(modifier = list(page = "all"))))),
                 rownames = FALSE)
     })
 
@@ -908,7 +929,7 @@ load("../../data/All20A2008matches_test.RData")
         h5("Abundance")
       checkboxGroupInput(paste(thisid, "trend_plot_metric", sep = ""), "",choices = c("Total", "Bulls", "Cows", "Calves"), selected = "Total", inline = T)
       }else{
-        h6("There exist redundant/misleading surveys in the database. Select unwanted/duplicate surveys in the table below to remove them from the analysis. Efforts should be made to delete these surveys from the database.")
+        h6("There exist redundant/misleading surveys in the database. Select unwanted/duplicate surveys in the table above and click 'Remove from trend' to remove them from the analysis. Efforts should be made to delete these surveys from the database.")
       }
 
     })

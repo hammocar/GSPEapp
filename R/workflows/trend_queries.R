@@ -30,24 +30,24 @@ moose <- DBI::dbConnect(
 )
 
 
-keyword<-"20E TAYLOR CORRIDOR"
-year_min<- 2000
-year_max<-2020
-
-
-
-# Query to search for survey ID's that match keyword and year inputs
-
-query<-paste("SELECT DISTINCT surveyid, surveyname, surveyyear
-    FROM v_wc_moosepop_reprospreadsheet
-    WHERE surveyname like '", keyword,"%' AND surveyyear BETWEEN ",year_min, " AND ", year_max,sep="")
-
-all.id.list <- dbGetQuery(moose,query)
-all.id.list
+# keyword<-"20E TAYLOR CORRIDOR"
+# year_min<- 2000
+# year_max<-2020
+#
+#
+#
+# # Query to search for survey ID's that match keyword and year inputs
+#
+# query<-paste("SELECT DISTINCT surveyid, surveyname, surveyyear
+#     FROM v_wc_moosepop_reprospreadsheet
+#     WHERE surveyname like '", keyword,"%' AND surveyyear BETWEEN ",year_min, " AND ", year_max,sep="")
+#
+# all.id.list <- dbGetQuery(moose,query)
+# all.id.list
 
 # Query to select individual survey using unique survey ID
 
-survey_id<- 361
+survey_id<- 259
 
 moose.dat <- dbGetQuery(moose,
                         paste("exec spr_wc_moosepop_reprospreadsheet @surveyIDlist = '",
@@ -105,6 +105,10 @@ flexible_AA_tables<-possibly(AA_tables, otherwise = NULL)
 
 # Run all of the estimates
 out.all <- dlply(exact_match_data, .(SurveyID),.fun=function(x)flexible_AA_tables(x, column_names = "AA"))
+
+save(out.all, file = "data/All20A2008matches_test.RData")
+
+
 
 # Extract just the total abundance estimate
 trend_data<-map_df(out.all,  1)
