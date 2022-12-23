@@ -161,7 +161,9 @@ server<-shinyServer(function(input, output, session) {
                                       h4("Select a survey in the table"),
                                       column(width = 6,
                                       DT::dataTableOutput("tbl"),
+                                      br(),
                                       uiOutput("columns")),
+                                      br(),
                                       uiOutput("survey_action")%>% withSpinner(color="#0dc5c1")
                                       )))),
                              tabPanel("Survival"),
@@ -253,13 +255,13 @@ observeEvent(input$tbl_rows_selected,{
       req(input$tbl_rows_selected)
       actionGroupButtons(
         inputIds = c("survey_data", "GSPE", "Trend", "Plan"),
-        labels = c("View/download survey data", "Single survey GSPE details", "Trend analysis", "Plan a new survey for this area"),
+        labels = c("View/download survey data", "Single survey GSPE details", "Trend analysis.", "Plan a new survey for this area"),
         status = "primary"
         )})
 
     output$columns<-renderUI({
       req(input$tbl_rows_selected)
-      pickerInput(inputId = "columns", label = "Identify analysis area columns (if any)", choices = names(values$moose.dat), multiple = TRUE)
+      pickerInput(inputId = "columns", label = "Identify analysis area columns (if any). Only choose one at a time for trend analysis", choices = names(values$moose.dat), multiple = TRUE)
       })
 
 ########################################################################
@@ -288,12 +290,10 @@ observeEvent(input$tbl_rows_selected,{
       thisid <- paste0("survey_data", thisid)
 
 
-
-
       # Add the view survey tab
       appendTab("abundance_tabs",
                 tabPanel(
-                  value =paste("View data", values$authorized_surveys[input$tbl_rows_selected,"surveyname"], " ", values$authorized_surveys[input$tbl_rows_selected,"surveyyear"]),
+                  value =paste("View data", values$authorized_surveys[input$tbl_rows_selected,"surveyname"], " ", values$authorized_surveys[input$tbl_rows_selected,"surveyyear"], idcount()),
                   title = tab_title( paste("View data", values$authorized_surveys[input$tbl_rows_selected,"surveyname"], " ", values$authorized_surveys[input$tbl_rows_selected,"surveyyear"])),
                   box(width = 12,
                       title = "Survey Data",
@@ -669,8 +669,8 @@ observeEvent(input[[paste(idcount(), "maps", sep = "")]],{
 
     appendTab("abundance_tabs",
     tabPanel(
-      value = paste(values$authorized_surveys[input$tbl_rows_selected,"surveyname"], " ", values$authorized_surveys[input$tbl_rows_selected,"surveyyear"], "Trend analysis",idcount()),
-      title = tab_title(paste(values$authorized_surveys[input$tbl_rows_selected,"surveyname"], " ", values$authorized_surveys[input$tbl_rows_selected,"surveyyear"], "Trend analysis")),
+      value = paste(values$authorized_surveys[input$tbl_rows_selected,"surveyname"], input$columns, values$authorized_surveys[input$tbl_rows_selected,"surveyyear"], "Trend analysis",idcount()),
+      title = tab_title(paste(values$authorized_surveys[input$tbl_rows_selected,"surveyname"], input$columns, values$authorized_surveys[input$tbl_rows_selected,"surveyyear"], "Trend analysis")),
       h4(strong("Trend Analysis")),
       fluidRow(
         column(width = 9,
@@ -704,71 +704,65 @@ observeEvent(input[[paste(idcount(), "maps", sep = "")]],{
           ), select=TRUE)
 
 
+if(length(input$columns == 1)){
+  values[[paste(thisid, "moose_dat", sep = "")]]<-values$moose.dat[which(values$moose.dat[,input$columns]==1),]
+}else if(is.null(input$columns)){
+  values[[paste(thisid, "moose_dat", sep = "")]]<-values$moose.dat
+}
 
-      # Extract Unit IDs to search
-      values[[paste(thisid, "moose_dat", sep = "")]]<-values$moose.dat
 
       unit_IDs<-values[[paste(thisid, "moose_dat", sep = "")]]$UnitID
 
       l<-length(unit_IDs)
 
 
-      # # Find surveys that at least PARTIALLY include area of interest
-      # incProgress(0.1, detail = "Finding matching surveys")
-      #
-      # partial <-
-      #   tbl(values$moose, "v_wc_moosepop_reprospreadsheet") %>%
-      #   filter(UnitID %in% unit_IDs) %>%
-      #   collect() %>%
-      #   dplyr::select(SurveyID)
-      #
-      # survey_IDs_partial<- unique(partial$SurveyID)
-      #
-      # # Get all survey data from the partial matches
-      # incProgress(0.05, detail = "Finding matching surveys")
-      #
-      # partial_match_data <- dbGetQuery(values$moose,
-      #                                  paste("exec spr_wc_moosepop_reprospreadsheet @SurveyIDList = '",
-      #                                        paste(as.character(survey_IDs_partial), sep="' '", collapse=", "),
-      #                                    "'", sep = ""))
-      #
-      # # Identify only the surveys that include the entire AA
-      # incProgress(0.05, detail = "Filtering to only matched area")
-      #
-      # partial_match_data<-
-      #   partial_match_data %>%
-      #   filter(UnitID %in% unit_IDs) %>%
-      #   group_by(SurveyID, SurveyName, Surveyyear) %>%
-      #   dplyr::summarise(n = n()) %>%
-      #   ungroup() %>%
-      #   dplyr::filter(n == l)
-#
-#       # Get the survey data for the surveys that include the entire AA
-#       incProgress(0.1, detail = "Fetching abundance estimates. This may take a while!")
-#
-#       exact_match_data <- dbGetQuery(values$moose,
-#                                      paste("exec spr_wc_moosepop_reprospreadsheet @SurveyIDList = '",
-#                                            paste(as.character(partial_match_data$SurveyID), sep="' '", collapse=", "),
-#                                        "'", sep = ""))
-#
-#       exact_match_data$AA<-0
-#       exact_match_data[is.element(exact_match_data$UnitID, unit_IDs),"AA"]<-1
-#
-#       # Create a function that will run and can be mapped even if there's an error in a survey
-#       flexible_AA_tables<-possibly(AA_tables, otherwise = NULL)
-#
-#       # Run all of the estimates
-#       out.all <- dlply(exact_match_data, .(SurveyID),.fun=function(x)flexible_AA_tables(x, column_names = "AA"))
-#
+# Find surveys that at least PARTIALLY include area of interest
+incProgress(0.1, detail = "Finding matching surveys")
+
+partial <-
+  tbl(values$moose, "v_wc_moosepop_reprospreadsheet") %>%
+  filter(UnitID %in% unit_IDs) %>%
+  collect() %>%
+  dplyr::select(SurveyID)
+
+survey_IDs_partial<- unique(partial$SurveyID)
+
+# Get all survey data from the partial matches
+incProgress(0.05, detail = "Finding matching surveys")
+
+partial_match_data <- dbGetQuery(values$moose,
+                                 paste("exec spr_wc_moosepop_reprospreadsheet @SurveyIDList = '",
+                                       paste(as.character(survey_IDs_partial), sep="' '", collapse=", "),
+                                       "'", sep = ""))
 
 
-load("../../data/All20A2008matches_test.RData")
+# Identify only the surveys that include the entire AA
+incProgress(0.05, detail = "Filtering to only matched area")
+partial_match_data<-
+  partial_match_data %>%
+  filter(UnitID %in% unit_IDs) %>%
+  group_by(SurveyID, SurveyName, Surveyyear) %>%
+  dplyr::summarise(n = n()) %>%
+  ungroup() %>%
+  dplyr::filter(n == l)
 
+# Get the survey data for the surveys that include the entire AA
+incProgress(0.1, detail = "Fetching abundance estimates. This may take a while!")
 
-# case_when(input[[paste(thisid, "abundance_metric", sep = "")]] == "Total" ~ "total_results",
-#           input[[paste(thisid, "abundance_metric", sep = "")]] == "Bulls" ~ "bull_results",
-#           input[[paste(thisid, "abundance_metric", sep = "")]] == "TotalCows" ~ "cow_results",
-#           input[[paste(thisid, "abundance_metric", sep = "")]] == "TotalCalves" ~ "calf_results",
+exact_match_data <- dbGetQuery(values$moose,
+                               paste("exec spr_wc_moosepop_reprospreadsheet @SurveyIDList = '",
+                                     paste(as.character(partial_match_data$SurveyID), sep="' '", collapse=", "),
+                                     "'", sep = ""))
+
+exact_match_data$AA<-0
+exact_match_data[is.element(exact_match_data$UnitID, unit_IDs),"AA"]<-1
+
+# Create a function that will run and can be mapped even if there's an error in a survey
+flexible_AA_tables<-possibly(AA_tables, otherwise = NULL)
+
+# Run all of the estimates
+out.all <- dlply(exact_match_data, .(SurveyID),.fun=function(x)flexible_AA_tables(x, column_names = "AA"))
+
 
       # Extract just the abundance estimates
       trend_data<-rbind(
@@ -788,21 +782,18 @@ load("../../data/All20A2008matches_test.RData")
 
       trend_data<-
         trend_data %>%
-        group_by(Surveyyear) %>%
-        dplyr::mutate(redundant_name = SurveyName,
-                      redundant = length(Surveyyear))
+        group_by(Surveyyear, metric) %>%
+        dplyr::mutate(redundant = length(Surveyyear))
 
 
-      # # Extract just the composition estimates
-      # trend_comp_data<-rbind(
-      #   map_df(out.all,  7) %>% mutate(metric = "BullCow"),
-      #   map_df(out.all,  8) %>% mutate(metric = "CalfCow"))
-      #
+      # Extract just the composition estimates
+      trend_comp_data<-rbind(
+        map_df(out.all,  9) %>% mutate(metric = "BullCow"),
+        map_df(out.all,  10) %>% mutate(metric = "CalfCow"))
 
 
-
-
-      values[[paste(thisid, "trend_data", sep = "")]]<-trend_data %>%
+      values[[paste(thisid, "trend_data", sep = "")]]<-
+        trend_data %>%
         arrange(Surveyyear) %>%
         filter(metric == "Total")
 
@@ -815,6 +806,7 @@ load("../../data/All20A2008matches_test.RData")
 
 
     output[[paste(thisid, "trend_data_selection_table", sep = "")]]<-DT::renderDataTable(server = FALSE,{
+
       datatable(values[[paste(thisid, "trend_data", sep = "")]][,c("SurveyName",
                                                                          "Surveyyear",
                                                                          "Total.Est",
@@ -931,9 +923,7 @@ load("../../data/All20A2008matches_test.RData")
       }else{
         h6("There exist redundant/misleading surveys in the database. Select unwanted/duplicate surveys in the table above and click 'Remove from trend' to remove them from the analysis. Efforts should be made to delete these surveys from the database.")
       }
-
     })
-
 
 
     output[[paste(thisid, "trend_percent_comp_plot_metric", sep = "")]]<-renderUI({
@@ -1039,16 +1029,15 @@ load("../../data/All20A2008matches_test.RData")
 
 
 
-
-
-
       labels<-as.character(seq(min(values[[paste(thisid, "trend_composition_plot_data", sep = "")]]$Surveyyear), max(values[[paste(thisid, "trend_composition_plot_data", sep = "")]]$Surveyyear), by = 1))
 
       # labels[(seq(min(values[[paste(thisid, "trend_composition_plot_data", sep = "")]]$Surveyyear), max(values[[paste(thisid, "trend_composition_plot_data", sep = "")]]$Surveyyear), by = 1)%%2 == 1)]<-''
       myColors <- c(brewer.pal(4,"Set1"))
+
       fillscale_values<-c("Cows" = myColors[4],
                          "Bulls" = myColors[2],
                          "Calves" = myColors[3])[which(is.element(c("Cows", "Bulls", "Calves"), input[[paste(thisid, "trend_percent_comp_plot_metric", sep = "")]]))]
+
       fillScale <- scale_fill_manual(values = fillscale_values)
 
 
