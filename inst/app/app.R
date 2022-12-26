@@ -35,8 +35,8 @@ library(odbc)
 library(lubridate)
 library(bslib)
 
-load("authorized_surveys_demo.RData")
-load("all_data_demo.RData")
+load("authorized_surveys_io_demo.RData")
+load("partial_match_data_demo.RData")
 source("moosepop.R")
 # source("D:/Projects/Moose/Surveys/John's Code/GSPEandMoosePopCode.r")
 source("SCF_apply_functions.R")
@@ -87,9 +87,6 @@ textStyle <- element_text(face = "bold.italic", color = "black", size = 20)
 #    http://shiny.rstudio.com/
 #
 # Define server logic
-
-
-
 
 ##################################################################
 
@@ -214,9 +211,9 @@ server<-shinyServer(function(input, output, session) {
     observeEvent(input$tbl_rows_selected,{
 
     # Look at the row of the table that was clicked, get the survey id
-    values$survey_ids <- authorized_surveys[input$tbl_rows_selected,"surveyid"]
+    values$survey_ids <- authorized_surveys_io[input$tbl_rows_selected,"surveyid"]
 
-    values$moose.dat<-all_data %>% filter(is.element(SurveyID, values$survey_ids))
+    values$moose.dat<-partial_match_data %>% filter(is.element(SurveyID, values$survey_ids))
 
 })
 
@@ -240,8 +237,8 @@ server<-shinyServer(function(input, output, session) {
 
 
     output$tbl <- DT::renderDataTable({
-      authorized_surveys <- authorized_surveys %>% arrange(desc(surveyyear))
-        datatable(authorized_surveys[,c("surveyname", "surveyyear", "surveyid")],
+      authorized_surveys_io <- authorized_surveys_io %>% arrange(desc(surveyyear))
+        datatable(authorized_surveys_io[,c("surveyname", "surveyyear", "surveyid")],
                   filter = 'top',
                   selection = 'single',
                   options = list(dom = "Blrtip",
@@ -291,8 +288,8 @@ server<-shinyServer(function(input, output, session) {
       # Add the view survey tab
       appendTab("abundance_tabs",
                 tabPanel(
-                  value =paste("View data", authorized_surveys[input$tbl_rows_selected,"surveyname"], " ", authorized_surveys[input$tbl_rows_selected,"surveyyear"], idcount()),
-                  title = tab_title( paste("View data", authorized_surveys[input$tbl_rows_selected,"surveyname"], " ", authorized_surveys[input$tbl_rows_selected,"surveyyear"])),
+                  value =paste("View data", authorized_surveys_io[input$tbl_rows_selected,"surveyname"], " ", authorized_surveys_io[input$tbl_rows_selected,"surveyyear"], idcount()),
+                  title = tab_title( paste("View data", authorized_surveys_io[input$tbl_rows_selected,"surveyname"], " ", authorized_surveys_io[input$tbl_rows_selected,"surveyyear"])),
                   box(width = 12,
                       title = "Survey Data",
                       status = "primary",
@@ -400,8 +397,8 @@ server<-shinyServer(function(input, output, session) {
 
       appendTab("abundance_tabs",
                 tabPanel(
-                  value = paste("GSPE details:", authorized_surveys[input$tbl_rows_selected,"surveyname"], " ", authorized_surveys[input$tbl_rows_selected,"surveyyear"],idcount()),
-                  title =tab_title( paste("GSPE details:", authorized_surveys[input$tbl_rows_selected,"surveyname"], " ", authorized_surveys[input$tbl_rows_selected,"surveyyear"])),
+                  value = paste("GSPE details:", authorized_surveys_io[input$tbl_rows_selected,"surveyname"], " ", authorized_surveys_io[input$tbl_rows_selected,"surveyyear"],idcount()),
+                  title =tab_title( paste("GSPE details:", authorized_surveys_io[input$tbl_rows_selected,"surveyname"], " ", authorized_surveys_io[input$tbl_rows_selected,"surveyyear"])),
                   tags$script(
                     "$( document ).ready(function() {
                $(\".tab-content [type='actionButton']\").on('click', function(){
@@ -542,7 +539,7 @@ server<-shinyServer(function(input, output, session) {
 
 
     updateTabsetPanel(session, "abundance_tabs",
-                      selected = paste("GSPE details:", authorized_surveys[input$tbl_rows_selected,"surveyname"], " ", authorized_surveys[input$tbl_rows_selected,"surveyyear"], idcount())
+                      selected = paste("GSPE details:", authorized_surveys_io[input$tbl_rows_selected,"surveyname"], " ", authorized_surveys_io[input$tbl_rows_selected,"surveyyear"], idcount())
     )
 
 })
@@ -668,8 +665,8 @@ observeEvent(input[[paste(idcount(), "maps", sep = "")]],{
 
     appendTab("abundance_tabs",
     tabPanel(
-      value = paste(authorized_surveys[input$tbl_rows_selected,"surveyname"], input$columns, authorized_surveys[input$tbl_rows_selected,"surveyyear"], "Trend analysis",idcount()),
-      title = tab_title(paste(authorized_surveys[input$tbl_rows_selected,"surveyname"], input$columns, authorized_surveys[input$tbl_rows_selected,"surveyyear"], "Trend analysis")),
+      value = paste(authorized_surveys_io[input$tbl_rows_selected,"surveyname"], input$columns, authorized_surveys_io[input$tbl_rows_selected,"surveyyear"], "Trend analysis",idcount()),
+      title = tab_title(paste(authorized_surveys_io[input$tbl_rows_selected,"surveyname"], input$columns, authorized_surveys_io[input$tbl_rows_selected,"surveyyear"], "Trend analysis")),
       h4(strong("Trend Analysis")),
       fluidRow(
         column(width = 9,
@@ -693,7 +690,7 @@ observeEvent(input[[paste(idcount(), "maps", sep = "")]],{
       uiOutput(paste(thisid, "trend_percent_comp_plot_metric", sep = "")),
       plotOutput(paste(thisid, "matching_composition_plot", sep = "")),
       br(),
-      p(paste("Shown are all surveys that fully contain the area in the", authorized_surveys[input$tbl_rows_selected,'surveyname'], " ", authorized_surveys[input$tbl_rows_selected,'surveyyear'], "survey or analysis area (if entered).
+      p(paste("Shown are all surveys that fully contain the area in the", authorized_surveys_io[input$tbl_rows_selected,'surveyname'], " ", authorized_surveys_io[input$tbl_rows_selected,'surveyyear'], "survey or analysis area (if entered).
         The abundance estimates shown are for that specific area only, even if the area was a subset of a larger survey in a given year.
         In other words, these are apples-to-apples abundance comparisons of the searched area.")),
       br(),
@@ -710,7 +707,7 @@ if(length(input$columns == 1)){
 }
 
 
-      unit_IDs<-values[[paste(thisid, "moose_dat", sep = "")]]$UnitID
+      unit_IDs<-unique(values[[paste(thisid, "moose_dat", sep = "")]]$UnitID)
 
       l<-length(unit_IDs)
 
@@ -734,15 +731,15 @@ incProgress(0.05, detail = "Finding matching surveys")
 #                                        paste(as.character(survey_IDs_partial), sep="' '", collapse=", "),
 #                                        "'", sep = ""))
 
- save(all_data, file = "all_data_demo.RData")
+# save(all_data, file = "all_data_demo.RData")
 # load("partial_match_data_demo.RData")
-values$moose.dat<-all_data %>% filter(is.element(SurveyID, values$survey_ids))
+values$moose.dat<-partial_match_data %>% filter(is.element(SurveyID, values$survey_ids))
 
 # Identify only the surveys that include the entire AA
 incProgress(0.05, detail = "Filtering to only matched area")
 
-partial_match_data<-
-  all_data %>%
+partial_match<-
+  partial_match_data %>%
   filter(UnitID %in% unit_IDs) %>%
   group_by(SurveyID, SurveyName, Surveyyear) %>%
   dplyr::summarise(n = n()) %>%
@@ -757,7 +754,7 @@ incProgress(0.1, detail = "Fetching abundance estimates. This may take a while!"
 #                                      paste(as.character(partial_match_data$SurveyID), sep="' '", collapse=", "),
 #                                      "'", sep = ""))
 
-exact_match_data<- all_data %>% filter(is.element(SurveyID, partial_match_data$SurveyID))
+exact_match_data<- partial_match_data %>% filter(is.element(SurveyID, partial_match$SurveyID))
 exact_match_data$AA<-0
 exact_match_data[is.element(exact_match_data$UnitID, unit_IDs),"AA"]<-1
 
@@ -778,7 +775,7 @@ out.all <- dlply(exact_match_data, .(SurveyID),.fun=function(x)flexible_AA_table
 
 
       trend_data$SurveyID<-rep(as.integer(names(out.all[!sapply( out.all, function(x) length(x) == 0 )])), each = 2)
-      trend_data<-left_join(trend_data, partial_match_data) %>% filter(Area == "AA")
+      trend_data<-left_join(trend_data, partial_match) %>% filter(Area == "AA")
 
 
       # Deal with multiple surveys in the same year
@@ -831,11 +828,11 @@ out.all <- dlply(exact_match_data, .(SurveyID),.fun=function(x)flexible_AA_table
                                buttons = list(list(extend = "copy", title = NULL),
                                               list(extend = "collection" ,
                                                    buttons = list(
-                                                     list(extend = "csv",filename = paste(authorized_surveys[input$tbl_rows_selected,"surveyname"],
+                                                     list(extend = "csv",filename = paste(authorized_surveys_io[input$tbl_rows_selected,"surveyname"],
                                                                                                   "Trend analysis")),
-                                                     list(extend = "excel",filename = paste(authorized_surveys[input$tbl_rows_selected,"surveyname"],
+                                                     list(extend = "excel",filename = paste(authorized_surveys_io[input$tbl_rows_selected,"surveyname"],
                                                                                         "Trend analysis")),
-                                                     list(extend = "pdf",filename = paste(authorized_surveys[input$tbl_rows_selected,"surveyname"],
+                                                     list(extend = "pdf",filename = paste(authorized_surveys_io[input$tbl_rows_selected,"surveyname"],
                                                                                         "Trend analysis"))),
                                                    text = "Download",
                                                    exportOptions = list(modifier = list(page = "all"))))),
@@ -852,13 +849,13 @@ out.all <- dlply(exact_match_data, .(SurveyID),.fun=function(x)flexible_AA_table
                                buttons = list(list(extend = "copy", title = NULL),
                                               list(extend = "collection" ,
                                                    buttons = list(
-                                                     list(extend = "csv",filename = paste(authorized_surveys[input$tbl_rows_selected,"surveyname"],
+                                                     list(extend = "csv",filename = paste(authorized_surveys_io[input$tbl_rows_selected,"surveyname"],
                                                                                           "Potential Bad Surveys")),
-                                                     list(extend = "excel",filename = paste(authorized_surveys[input$tbl_rows_selected,"surveyname"],
+                                                     list(extend = "excel",filename = paste(authorized_surveys_io[input$tbl_rows_selected,"surveyname"],
                                                                                             "Potential Bad Surveys")),
-                                                     list(extend = "pdf",filename = paste(authorized_surveys[input$tbl_rows_selected,"surveyname"],
+                                                     list(extend = "pdf",filename = paste(authorized_surveys_io[input$tbl_rows_selected,"surveyname"],
                                                                                           "Potential Bad Surveys"),
-                                                          title = paste(authorized_surveys[input$tbl_rows_selected,"surveyname"],
+                                                          title = paste(authorized_surveys_io[input$tbl_rows_selected,"surveyname"],
                                                                         "Potential Bad Surveys"))),
                                                    text = "Download",
                                                    exportOptions = list(modifier = list(page = "all"))))),
@@ -1080,8 +1077,8 @@ out.all <- dlply(exact_match_data, .(SurveyID),.fun=function(x)flexible_AA_table
     observeEvent(input$Plan , {
       appendTab("abundance_tabs",
                 tabPanel(
-                  value = paste("Plan a survey like", authorized_surveys[input$tbl_rows_selected,"surveyname"], " ", authorized_surveys[input$tbl_rows_selected,"surveyyear"]),
-                  title = paste("Plan a survey like", authorized_surveys[input$tbl_rows_selected,"surveyname"], " ", authorized_surveys[input$tbl_rows_selected,"surveyyear"])
+                  value = paste("Plan a survey like", authorized_surveys_io[input$tbl_rows_selected,"surveyname"], " ", authorized_surveys_io[input$tbl_rows_selected,"surveyyear"]),
+                  title = paste("Plan a survey like", authorized_surveys_io[input$tbl_rows_selected,"surveyname"], " ", authorized_surveys_io[input$tbl_rows_selected,"surveyyear"])
                 ), select=TRUE)})
 
 })
